@@ -13,6 +13,8 @@ npm install
 npm run dev      # local dev server
 npm run build    # type-check + production build into dist/
 npm run preview  # preview the production build
+npm test         # balance targets and config hash against docs/balance.md (about 10 s)
+npm run balance  # the balance report: tiers × classes, per-stage tables, sweeps
 ```
 
 Requires Node 20+. Click once anywhere and the music begins (browser autoplay rules).
@@ -50,6 +52,7 @@ Requires Node 20+. Click once anywhere and the music begins (browser autoplay ru
 - Canvas 2D renderer: procedural parallax backgrounds, vector characters, particles, floating combat text.
 - Web Audio synthesis: five original generative tracks (one per realm) plus a title/map theme, with reverb, pads, plucked arps, leads and drums; all SFX are synthesized too.
 - DOM/CSS UI for menus, map, loadout and results.
+- `src/balance.ts` holds every tunable number; `tools/balance/` is a headless harness that plays the real game on seeded dice (see `docs/balance.md`).
 - `localStorage` save file, no backend.
 - GitHub Actions → GitHub Pages deployment.
 
@@ -59,12 +62,15 @@ Requires Node 20+. Click once anywhere and the music begins (browser autoplay ru
 src/
   main.ts       game flow, screens, battle loop, input
   combat.ts     deterministic-ish auto-battler engine (stats, statuses, AI)
-  data.ts       classes, abilities, boons, enemies, realms, balance
+  data.ts       classes, abilities, boons, enemies, realms
+  balance.ts    every tunable number (scaling, XP, ultimate charge, Rally, enrage)
   art.ts        procedural canvas art, SVG portraits/emblems
   audio.ts      Web Audio music sequencer and SFX
   state.ts      save data, XP/levels, boon rolls
   ui.ts         screen templates and icon set
   style.css     visual design
+tools/balance/  seeded headless harness over the real engine: tiers, targets, tables, sweeps
+docs/balance.md  the balance record: targets, results, proposals, how to retune
 ```
 
 ## Deployment
@@ -73,6 +79,6 @@ Pushes to `main` (or `master`) build and deploy through `.github/workflows/deplo
 
 ## Notes
 
-- Balance is tuned for a relaxed, readable auto-battler: most runs complete, bosses occasionally require a retry, and every defeat gives a stacking Rally bonus.
+- Balance is measured, not assumed: `docs/balance.md` records the targets and the current results, and `npm test` checks them. On the first measurement the game was a guaranteed win for anyone who takes boons, the ultimate was Ready in fewer than half of normal fights, and skipping every boon could trap a player on the final boss. The doc has the numbers and the proposed values.
 - Battles never stall: after 70 seconds a soft enrage increases all damage.
 - Audio is optional and can be toggled separately for music and effects.

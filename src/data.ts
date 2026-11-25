@@ -1,3 +1,5 @@
+import { BALANCE } from './balance';
+
 export type ClassId = 'warden' | 'pyromancer' | 'shadowblade' | 'spiritcaller';
 export type Side = 'hero' | 'enemy' | 'ally';
 export type IconName =
@@ -303,11 +305,12 @@ export function stageInfo(globalStage: number) {
 }
 
 export function scaleForStage(globalStage: number): number {
-  return 1 + globalStage * 0.155;
+  return 1 + globalStage * BALANCE.enemy.hpPerStage;
 }
 
 export function enemyCountFor(stageInLoc: number): number {
-  return stageInLoc >= 3 ? 3 : 2;
+  const { normal, many, manyFromStageInLoc } = BALANCE.enemy.count;
+  return stageInLoc >= manyFromStageInLoc ? many : normal;
 }
 
 export interface EnemyInstance {
@@ -319,12 +322,13 @@ export interface EnemyInstance {
 
 export function buildWave(globalStage: number): EnemyInstance[] {
   const { location, stageInLoc } = stageInfo(globalStage);
+  const E = BALANCE.enemy;
   const isBoss = stageInLoc === 4;
   if (isBoss) {
-    const escorts = location.enemies.slice(0, 2);
+    const escorts = location.enemies.slice(0, E.bossEscorts);
     return [
-      { def: location.boss, name: location.boss.name, hpScale: 1 + globalStage * 0.18, atkScale: 1 + globalStage * 0.13 },
-      ...escorts.map((def, i) => ({ def, name: def.name, hpScale: (1 + globalStage * 0.155) * (0.8 + i * 0.08), atkScale: 1 + globalStage * 0.12 })),
+      { def: location.boss, name: location.boss.name, hpScale: 1 + globalStage * E.bossHpPerStage, atkScale: 1 + globalStage * E.bossAtkPerStage },
+      ...escorts.map((def, i) => ({ def, name: def.name, hpScale: (1 + globalStage * E.hpPerStage) * (E.escortHp + i * E.escortHpStep), atkScale: 1 + globalStage * E.escortAtkPerStage })),
     ];
   }
   const count = enemyCountFor(stageInLoc);
@@ -334,7 +338,7 @@ export function buildWave(globalStage: number): EnemyInstance[] {
   for (let i = 0; i < count; i++) {
     const def = picks[(off + i) % picks.length];
     const s = scaleForStage(globalStage);
-    out.push({ def, name: def.name, hpScale: s * (0.94 + i * 0.05), atkScale: 1 + globalStage * 0.115 });
+    out.push({ def, name: def.name, hpScale: s * (E.waveHp + i * E.waveHpStep), atkScale: 1 + globalStage * E.atkPerStage });
   }
   return out;
 }

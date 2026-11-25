@@ -3,6 +3,7 @@ import {
   BOONS, TOTAL_STAGES, buildWave, classById, stageInfo, type ClassId, type IconName,
 } from './data';
 import { Battle, type CombatEvent } from './combat';
+import { BALANCE } from './balance';
 import { SceneRenderer } from './art';
 import { audio, type ThemeId } from './audio';
 import {
@@ -23,8 +24,17 @@ let renderer: SceneRenderer | null = null;
 let raf = 0;
 let paused = false;
 let speed = 1;
+/**
+ * The default pace: seconds of game time per second of real time at 1x. Fights last 6-30 s of
+ * game time, which at 1.0 was too quick to read, so the clock runs at 0.75 by default and a 6 s
+ * fight takes 8 s on screen. The speed button doubles whatever this is (2x = 1.5x real time).
+ * Outcomes do not depend on it: tools/balance steps in game time.
+ */
+const TIME_SCALE = 0.75;
 let overlayShown = false;
-let pendingResult: { xp: number; levelUps: number; final: boolean } | null = null;
+// `stage` is the stage that was cleared: the save has already moved on by the time the result
+// overlay renders, so it must not be looked up from the save again.
+let pendingResult: { xp: number; levelUps: number; final: boolean; stage: number } | null = null;
 let endHandled = false;
 let endTimer = 0;
 let logs: string[] = [];
@@ -299,13 +309,13 @@ function handleBattleEnd(victory: boolean): void {
   if (victory) {
     const final = save.stage === TOTAL_STAGES - 1;
     const res = completeStage();
-    pendingResult = { xp: res.xp, levelUps: res.levelUps, final };
+    pendingResult = { xp: res.xp, levelUps: res.levelUps, final, stage: res.stageCleared };
     rally = 1;
     audio.sfx('victory');
     if (res.levelUps > 0) setTimeout(() => audio.sfx('levelup'), 500);
     addLog(`<b style="color:var(--gold-bright)">Victory</b> — the road opens`);
   } else {
-    rally = Math.min(2.2, rally + 0.12);
+    rally = Math.min(BALANCE.rally.cap, rally + BALANCE.rally.step);
     audio.sfx('defeat');
     addLog('Your spark gutters out…');
   }
@@ -317,9 +327,11 @@ function showResultOverlay(): void {
   const overlay = document.getElementById('battle-overlay');
   if (!overlay) return;
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
-  const info = stageInfo(getSave().stage);
   if (battle.victory) {
     const res = pendingResult;
+    // Name the realm that was just cleared, not the one the save now points at (after a boss
+    // kill those differ: completeStage() has already advanced to the next realm's first stage).
+    const info = stageInfo(res?.stage ?? getSave().stage);
     overlay.innerHTML = `<div class="result-overlay">
       <div class="result-panel win">
         <div class="r-kicker">${res?.final ? 'The Last Ember' : 'Stage Cleared'}</div>
@@ -357,7 +369,9 @@ function loop(now: number): void {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   if (!paused) {
-    battle.update(dt * speed);
+    // One update per speed unit, not one update of dt * speed: Battle.update clamps a single step
+    // to 50 ms, so a doubled step was silently capped to ~1.5x at 30 fps and 1x at 20 fps.
+    for (let i = 0; i < speed; i++) battle.update(dt * TIME_SCALE);
   }
   renderer.draw(dt * (paused ? 0.2 : 1), battle);
   updateHud();

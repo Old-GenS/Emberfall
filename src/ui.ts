@@ -1,6 +1,6 @@
 import { BOONS, CLASSES, LOCATIONS, type ClassDef, type IconName, type LocationDef, TOTAL_STAGES, buildWave, classById, stageInfo } from './data';
 import { classPortraitSVG, locationEmblemSVG, DESIGN_W, DESIGN_H } from './art';
-import { type SaveData, getSave, heroStats, levelLabel, xpProgress, isVictory } from './state';
+import { type SaveData, getSave, heroStats, levelLabel, xpProgress, isVictory, stageRewardXp } from './state';
 
 const ICON_PATHS: Record<IconName, string> = {
   shield: '<path d="M12 2 20 5v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3Z"/><path d="M12 7v8M8.5 10.5h7"/>',
@@ -174,7 +174,7 @@ function realmCard(loc: LocationDef, idx: number, save: SaveData): string {
       <div class="stage-track">${connectors}</div>
       <div class="stage-name">${base + 4 < save.stage || save.stage >= TOTAL_STAGES ? 'Realm conquered' : locked ? 'Clear the previous realm to enter' : `Next: ${loc.stageNames[Math.max(0, Math.min(4, save.stage - base))]}`}</div>
       ${isCurrent ? `<div class="quest-strip">
-        <div class="quest-info"><span class="${save.stage % 5 === 4 ? 'tag boss-tag' : 'tag gold'}">${save.stage % 5 === 4 ? 'Boss Stage' : 'Stage ' + ((save.stage % 5) + 1)}</span><b>${stageInfo(save.stage).location.stageNames[save.stage % 5]}</b><span class="dot"></span><span>Rewards: <b>+${42 + save.stage * 9 + (save.stage % 5 === 4 ? 60 : 0)} XP</b> &amp; a boon</span></div>
+        <div class="quest-info"><span class="${save.stage % 5 === 4 ? 'tag boss-tag' : 'tag gold'}">${save.stage % 5 === 4 ? 'Boss Stage' : 'Stage ' + ((save.stage % 5) + 1)}</span><b>${stageInfo(save.stage).location.stageNames[save.stage % 5]}</b><span class="dot"></span><span>Rewards: <b>+${stageRewardXp(save.stage)} XP</b> &amp; a boon</span></div>
         <button class="btn primary small" data-battle="${save.stage}">Enter Battle</button>
       </div>` : ''}
     </div>
@@ -244,7 +244,6 @@ export function renderBattle(info: BattleUIInfo): string {
       ${icon(a.icon)}
       <div class="cd-mask" id="cd-${i}" style="transform:scaleY(0)"></div>
       <div class="cd-text" id="cdt-${i}"></div>
-      <span class="key">${i + 1}</span>
     </div>`).join('');
   return `<div class="screen battle-screen">
     <div class="battle-shell">
@@ -279,6 +278,7 @@ export function renderBattle(info: BattleUIInfo): string {
           <button class="ult-btn" id="ult-btn" title="Release your ultimate when charged" aria-label="Ultimate">
             ${icon(cls.ultimate.icon)}
             <svg class="charge-ring" viewBox="0 0 68 68"><circle id="ult-ring" cx="34" cy="34" r="32" stroke-dasharray="201" stroke-dashoffset="201"/></svg>
+            <span class="key" aria-hidden="true">Space</span>
           </button>
           <div class="ult-info">
             <span class="k">Ultimate</span>

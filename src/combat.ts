@@ -1,7 +1,8 @@
 import {
   type AbilityDef, type BodyKind, type ClassId, type EnemyDef, type EnemyInstance,
-  type Stats, type StatusKind, classById, stageInfo,
+  type Stats, type StatusKind, classById,
 } from './data';
+import { BALANCE } from './balance';
 
 export interface ActiveEffect {
   kind: StatusKind;
@@ -55,7 +56,7 @@ function baseUnit(partial: Partial<Unit> & Pick<Unit, 'side' | 'name' | 'body' |
     hp: partial.stats.maxHp,
     shield: 0,
     alive: true,
-    attackTimer: 0.6 + Math.random() * 0.5,
+    attackTimer: BALANCE.combat.firstAttackDelay + Math.random() * BALANCE.combat.firstAttackJitter,
     abilities: [],
     abilityCds: [],
     ultCharge: 0,
@@ -88,11 +89,11 @@ function enemyStats(def: EnemyDef, hpScale: number, atkScale: number, stage: num
   const s: Stats = {
     maxHp: Math.round(def.hp * hpScale),
     atk: def.atk * atkScale,
-    armor: def.armor + stage * 0.35,
-    crit: def.crit ?? 0.06,
-    critMult: 1.5,
+    armor: def.armor + stage * BALANCE.enemy.armorPerStage,
+    crit: def.crit ?? BALANCE.enemy.crit,
+    critMult: BALANCE.enemy.critMult,
     speed: def.speed,
-    dodge: def.dodge ?? 0.02,
+    dodge: def.dodge ?? BALANCE.enemy.dodge,
     regen: 0,
     lifesteal: 0,
     damageReduction: 0,
@@ -108,7 +109,7 @@ export function makeEnemyUnit(inst: EnemyInstance, stage: number): Unit {
     side: 'enemy', name: inst.name, body: def.body, colors: def.colors,
     stats: enemyStats(def, inst.hpScale, inst.atkScale, stage),
     abilities: def.abilities,
-    abilityCds: def.abilities.map((_, i) => 2.5 + i * 2.2),
+    abilityCds: def.abilities.map((_, i) => BALANCE.enemy.firstCast + i * BALANCE.enemy.castStagger),
     boss: !!def.boss,
     scale: def.scale ?? 1,
   });
@@ -141,8 +142,9 @@ export class Battle {
     this.chargeRate = heroStats.ultRate;
     this.hero = makeHeroUnit(heroClass, heroStats);
     this.hero.anim.spawn = 0;
-    const { stageInLoc } = stageInfo(globalStage);
-    this.enemies = wave.map(inst => makeEnemyUnit(inst, globalStage + stageInLoc));
+    // Armor scales with the global stage (0..24). It used to receive `globalStage + stageInLoc`,
+    // which gave every realm's boss more bonus armor than the enemies of the next realm.
+    this.enemies = wave.map(inst => makeEnemyUnit(inst, globalStage));
     this.units = [this.hero, ...this.enemies];
   }
 
@@ -161,7 +163,7 @@ export class Battle {
       return;
     }
     this.time += dt;
-    if (!this.enrageAnnounced && this.time > 70) {
+    if (!this.enrageAnnounced && this.time > BALANCE.combat.enrageAt) {
       this.enrageAnnounced = true;
       this.emit({ type: 'message', text: 'The air ignites — all damage increases!', tone: 'epic' });
     }
@@ -236,7 +238,7 @@ export class Battle {
 
     // ultimate charge over time for hero
     if (u.side === 'hero') {
-      u.ultCharge = clamp(u.ultCharge + dt * 0.75 * this.chargeRate, 0, 100);
+      u.ultCharge = clamp(u.ultCharge + dt * BALANCE.ultimate.passiveCharge * this.chargeRate, 0, 100);
     }
 
     // ability cooldowns
@@ -286,7 +288,7 @@ export class Battle {
     let kind: 'attack' = 'attack';
     // class passives
     if (u.classId === 'pyromancer') {
-      this.applyStatus(target, { kind: 'burn', duration: 3, power: u.stats.atk * 0.12 }, u);
+      this.applyStatus(target, { kind: 'burn', duration: BALANCE.combat.pyroBurnDuration, power: u.stats.atk * BALANCE.combat.pyroBurnPower }, u);
     }
     this.dealDamage(u, target, u.stats.atk * power * this.atkMult(u), { crit: true, kind });
   }
@@ -358,7 +360,7 @@ export class Battle {
           this.applyStatus(t, { ...ab.effect, power: this.scaleEffect(u, ab.effect) }, u);
         }
         if (isUlt && ab.effect?.kind === 'burn') {
-          this.applyStatus(t, { kind: 'stun', duration: 0.9, power: 1 }, u);
+          this.applyStatus(t, { kind: 'stun', duration: BALANCE.combat.pyroUltStun, power: 1 }, u);
         }
       }
     }
@@ -384,7 +386,7 @@ export class Battle {
 
   private applyStatus(target: Unit, spec: { kind: StatusKind; duration: number; power: number }, source: Unit): void {
     if (!target.alive) return;
-    if (spec.kind === 'stun' && target.boss) spec = { ...spec, duration: spec.duration * 0.55 };
+    if (spec.kind === 'stun' && target.boss) spec = { ...spec, duration: spec.duration * BALANCE.combat.bossStunFactor };
     const existing = target.effects.find(e => e.kind === spec.kind);
     if (existing) {
       existing.remaining = Math.max(existing.remaining, spec.duration);
@@ -414,7 +416,7 @@ export class Battle {
     target.hp -= dmg;
     target.anim.hit = Math.max(target.anim.hit, 0.5);
     this.emit({ type: 'damage', source: source ?? target, target, amount: dmg, crit: false, kind: 'dot' });
-    if (target.side === 'hero') this.gainUlt(dmg * 0.05);
+    if (target.side === 'hero') this.gainUlt(dmg * BALANCE.ultimate.chargeTaken);
     if (target.hp <= 0) this.kill(target);
   }
 
@@ -435,10 +437,10 @@ export class Battle {
     }
     let dmg = raw * rand(0.93, 1.07);
     // The air itself begins to burn after a minute — no battle can stall forever.
-    if (this.time > 70) dmg *= 1 + (this.time - 70) * 0.018;
+    if (this.time > BALANCE.combat.enrageAt) dmg *= 1 + (this.time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp;
     if (crit) {
       let cm = source.stats.critMult;
-      if (source.classId === 'shadowblade') cm += 0.25;
+      if (source.classId === 'shadowblade') cm += BALANCE.combat.shadowbladeCritBonus;
       dmg *= cm;
     }
     dmg *= 100 / (100 + target.stats.armor);
@@ -461,8 +463,8 @@ export class Battle {
       if (heal >= 1) this.heal(source, source, heal, false);
     }
     // ultimate charge
-    if (source.side === 'hero') this.gainUlt(dmg * 0.085);
-    if (target.side === 'hero') this.gainUlt(dmg * 0.05);
+    if (source.side === 'hero') this.gainUlt(dmg * BALANCE.ultimate.chargeDealt);
+    if (target.side === 'hero') this.gainUlt(dmg * BALANCE.ultimate.chargeTaken);
     // thorns
     const thorn = target.effects.find(e => e.kind === 'thorns');
     if (thorn && source !== target && source.alive && opts.kind !== 'thorns') {
@@ -525,7 +527,7 @@ export class Battle {
         forceCrit: this.hero.classId === 'shadowblade',
       });
       if (ult.effect && t.alive) this.applyStatus(t, { ...ult.effect, power: this.scaleEffect(this.hero, ult.effect) }, this.hero);
-      if (this.hero.classId === 'pyromancer' && t.alive) this.applyStatus(t, { kind: 'stun', duration: 0.9, power: 1 }, this.hero);
+      if (this.hero.classId === 'pyromancer' && t.alive) this.applyStatus(t, { kind: 'stun', duration: BALANCE.combat.pyroUltStun, power: 1 }, this.hero);
     }
     if (ult.target === 'self' && ult.selfEffect) {
       // Warden ult also taunts? no—shield + thorns handled above
