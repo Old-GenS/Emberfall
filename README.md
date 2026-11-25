@@ -79,6 +79,6 @@ Pushes to `main` (or `master`) build and deploy through `.github/workflows/deplo
 
 ## Notes
 
-- Balance is measured, not assumed: `docs/balance.md` records the targets and the current results, and `npm test` checks them. On the first measurement the game was a guaranteed win for anyone who takes boons, the ultimate was Ready in fewer than half of normal fights, and skipping every boon could trap a player on the final boss. The doc has the numbers and the proposed values.
+- Balance is measured, not assumed: `docs/balance.md` records the targets and the current results, and `npm test` checks them. After a first balance pass, bosses occasionally need a retry for the Pyromancer and Shadowblade, the ultimate is Ready in most fights and pressing it matters, and nobody can get stuck. The Warden and Spiritcaller never lose a boss, and the Warden takes about three times as long to win one; the doc has the numbers, what was changed, and what remains.
 - Battles never stall: after 70 seconds a soft enrage increases all damage.
 - Audio is optional and can be toggled separately for music and effects.

@@ -78,7 +78,7 @@ export const CLASSES: ClassDef[] = [
     tagline: 'An immovable flame in a falling world.',
     lore: 'Last of the Dawnwatch, sworn to hold the gate until the sun returns. The shield is not a tool. It is a promise.',
     colors: { main: '#ffcf7a', glow: '#ffae42', cloth: '#3b5c9e', accent: '#e8eefc' },
-    stats: baseStats({ maxHp: 380, atk: 23, armor: 20, crit: 0.09, critMult: 1.5, speed: 1.75, dodge: 0.02, regen: 0.6, damageReduction: 0.08 }),
+    stats: baseStats({ maxHp: 380, atk: 26, armor: 20, crit: 0.09, critMult: 1.5, speed: 1.6, dodge: 0.02, regen: 0.6, damageReduction: 0.08 }),
     passive: { name: 'Bulwark', desc: 'Takes 8% less damage from all sources.', icon: 'shield' },
     abilities: [
       { id: 'shield-slam', name: 'Shield Slam', desc: 'Crush one foe for 130% ATK and stun it for 1.2s.', icon: 'hammer', cooldown: 6.5, target: 'enemy', power: 1.3, shield: 0.05, effect: { kind: 'stun', duration: 1.2, power: 1 } },

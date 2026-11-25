@@ -12,9 +12,9 @@ export const BALANCE = {
   /** Enemy waves. `stage` runs 0..24; five stages per realm, the fifth is the boss. */
   enemy: {
     hpPerStage: 0.155,                       // normal enemies: HP × (1 + stage × this)
-    bossHpPerStage: 0.18,                    // bosses: HP × (1 + stage × this)
+    bossHpPerStage: 0.24,                    // bosses: HP × (1 + stage × this)
     atkPerStage: 0.115,                      // normal enemies: ATK × (1 + stage × this)
-    bossAtkPerStage: 0.13,                    // bosses: ATK × (1 + stage × this)
+    bossAtkPerStage: 0.45,                    // bosses: ATK × (1 + stage × this)
     escortAtkPerStage: 0.12,                 // the enemies that accompany a boss
     escortHp: 0.8, escortHpStep: 0.08,       // escorts: HP × (this + index × step)
     waveHp: 0.94, waveHpStep: 0.05,          // a normal wave: HP × (this + index × step)
@@ -34,16 +34,16 @@ export const BALANCE = {
   },
   boons: { offered: 3, weight: { common: 5, rare: 2.6, epic: 1.1 } },
   /** Ultimate charge: passive per second, plus this share of damage dealt and of damage taken. 100 = Ready. */
-  ultimate: { passiveCharge: 0.75, chargeDealt: 0.085, chargeTaken: 0.05 },
+  ultimate: { passiveCharge: 2, chargeDealt: 0.3, chargeTaken: 0.05 },
   combat: {
-    enrageAt: 70, enrageRamp: 0.018,          // after this many seconds, all damage grows by ramp per second
+    enrageAt: 30, enrageRamp: 0.08,          // after this many seconds, all damage grows by ramp per second
     bossStunFactor: 0.55,                    // stuns last this share of their time on a boss
     pyroUltStun: 0.9, pyroBurnDuration: 3, pyroBurnPower: 0.12,   // Pyromancer: her meteor stuns; basic attacks burn
     shadowbladeCritBonus: 0.25,              // Shadowblade: extra critical damage (Lethality)
     firstAttackDelay: 0.6, firstAttackJitter: 0.5,  // a unit's first swing: delay + jitter × random
   },
-  /** The mercy buff after a defeat (src/main.ts): HP and ATK × rally on the next try, +step per defeat. */
-  rally: { step: 0.12, cap: 2.2 },
+  /** The mercy buff after a defeat (src/main.ts): HP and ATK × rally on the next try, +step per defeat. 30 defeats reach 7x. */
+  rally: { step: 0.2, cap: 8 },
 };
 
 export type Balance = typeof BALANCE;
