@@ -1,0 +1,172 @@
+import { BOONS, BOONS as ALL_BOONS, CLASSES, type BoonDef, type ClassDef, type ClassId, type Stats, classById, stageInfo } from './data';
+
+export interface SaveData {
+  version: 1;
+  classId: ClassId | null;
+  level: number;
+  xp: number;
+  stage: number;        // next stage to play (0..24); 25 = victory
+  boons: string[];
+  sound: boolean;
+  music: boolean;
+  seenIntro: boolean;
+}
+
+const SAVE_KEY = 'emberfall-save-v1';
+
+export const defaultSave = (): SaveData => ({
+  version: 1, classId: null, level: 1, xp: 0, stage: 0, boons: [],
+  sound: true, music: true, seenIntro: false,
+});
+
+export function loadSave(): SaveData {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    const data = JSON.parse(raw) as SaveData;
+    if (data.version !== 1) return defaultSave();
+    return { ...defaultSave(), ...data };
+  } catch {
+    return defaultSave();
+  }
+}
+
+let save = loadSave();
+const listeners = new Set<() => void>();
+
+export const getSave = (): SaveData => save;
+export const hasHero = (): boolean => save.classId !== null;
+
+export function updateSave(patch: Partial<SaveData>, persist = true): void {
+  save = { ...save, ...patch };
+  if (persist) persistSave();
+  listeners.forEach(l => l());
+}
+
+export function persistSave(): void {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* ignore */ }
+}
+
+export function resetSave(): void {
+  const keep = { sound: save.sound, music: save.music };
+  save = { ...defaultSave(), ...keep };
+  persistSave();
+  listeners.forEach(l => l());
+}
+
+export function subscribe(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/* ------------------------------ Progression ------------------------------- */
+
+export const xpToNext = (level: number): number => 40 + level * 26;
+
+export function xpProgress(): { cur: number; need: number; pct: number } {
+  const need = xpToNext(save.level);
+  return { cur: save.xp, need, pct: Math.min(1, save.xp / need) };
+}
+
+/** Awards XP; returns number of levels gained. */
+export function awardXp(amount: number): number {
+  let gained = 0;
+  let xp = save.xp + amount;
+  let level = save.level;
+  while (xp >= xpToNext(level) && level < 50) {
+    xp -= xpToNext(level);
+    level++;
+    gained++;
+  }
+  updateSave({ xp, level });
+  return gained;
+}
+
+export function heroStats(): Stats {
+  const cls = save.classId ? classById(save.classId) : CLASSES[0];
+  return statsFor(cls, save.level, save.boons);
+}
+
+export function statsFor(cls: ClassDef, level: number, boonIds: string[]): Stats {
+  const lvl = Math.max(0, level - 1);
+  const s: Stats = {
+    ...cls.stats,
+    maxHp: Math.round(cls.stats.maxHp * (1 + lvl * 0.085)),
+    atk: Math.round(cls.stats.atk * (1 + lvl * 0.075) * 10) / 10,
+  };
+  for (const id of boonIds) {
+    const b = ALL_BOONS.find(x => x.id === id);
+    if (b) b.apply(s);
+  }
+  s.maxHp = Math.round(s.maxHp);
+  s.atk = Math.round(s.atk * 10) / 10;
+  s.crit = Math.min(0.75, s.crit);
+  s.dodge = Math.min(0.6, s.dodge);
+  s.damageReduction = Math.min(0.55, s.damageReduction);
+  return s;
+}
+
+/* -------------------------------- Rewards --------------------------------- */
+
+let pendingReward: { xp: number; levelUps: number; stageCleared: number } | null = null;
+
+export function stageRewardXp(globalStage: number): number {
+  return 42 + globalStage * 9 + (globalStage % 5 === 4 ? 60 : 0);
+}
+
+export function setPendingReward(r: { xp: number; levelUps: number; stageCleared: number }): void {
+  pendingReward = r;
+}
+export function takePendingReward() {
+  const r = pendingReward;
+  pendingReward = null;
+  return r;
+}
+
+export function completeStage(): { xp: number; levelUps: number; stageCleared: number } {
+  const cleared = save.stage;
+  const xp = stageRewardXp(cleared);
+  updateSave({ stage: Math.min(cleared + 1, 25) });
+  const levelUps = awardXp(xp);
+  return { xp, levelUps, stageCleared: cleared };
+}
+
+export function pickBoonChoices(count = 3): BoonDef[] {
+  const cls = save.classId!;
+  const pool = BOONS.filter(b => !b.classes || b.classes.includes(cls));
+  const weights: Record<string, number> = { common: 5, rare: 2.6, epic: 1.1 };
+  const chosen: BoonDef[] = [];
+  const available = [...pool];
+  while (chosen.length < count && available.length) {
+    const total = available.reduce((a, b) => a + weights[b.rarity], 0);
+    let r = Math.random() * total;
+    let idx = 0;
+    for (let i = 0; i < available.length; i++) {
+      r -= weights[available[i].rarity];
+      if (r <= 0) { idx = i; break; }
+    }
+    chosen.push(available.splice(idx, 1)[0]);
+  }
+  return chosen;
+}
+
+export function applyBoon(id: string): void {
+  updateSave({ boons: [...save.boons, id] });
+}
+
+export function levelLabel(level: number): string {
+  const titles = ['Wanderer', 'Wayfarer', 'Keeper', 'Champion', 'Luminary', 'Myth'];
+  return titles[Math.min(titles.length - 1, Math.floor((level - 1) / 4))];
+}
+
+export function currentLocation() {
+  return stageInfo(Math.min(save.stage, 24));
+}
+
+export function isVictory(): boolean {
+  return save.stage >= 25;
+}
+
+export function selectClass(id: ClassId): void {
+  updateSave({ classId: id, level: 1, xp: 0, stage: 0, boons: [] });
+}
