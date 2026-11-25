@@ -10,7 +10,7 @@ Last measured 2026-11-24, after a first balance pass, on this config:
 
 | | Config |
 |---|---|
-| Emberfall | `4465c252` |
+| Emberfall | `23a09cbb` |
 
 Everything under *Current results* was measured on this config. No human playtest has confirmed
 any of it. Results come from bots: the scripted tiers in `tools/balance/bots.ts`, played through
@@ -20,9 +20,9 @@ headless, on seeded dice.
 Every report, sweep and `npm test` prints the config it ran on. If the hash there differs from
 this table, the result is out of date. See *Keeping this file current*.
 
-Three of the eleven targets below fail on this config: the Warden and the Spiritcaller never lose a
-boss, and the Warden takes 3.4 times as long to win one. Both are class design, not tuning, and both
-are older than this config; the balance pass before it failed six.
+Three of the eleven targets below fail on this config: the Warden and the Spiritcaller almost never lose a
+boss, and the Warden takes 3.4 times as long to win one. Both are class design, not tuning; the nine attempts to tune the Warden
+into losing are recorded under *The Warden investigation*. The balance pass before it failed six.
 
 ## Quick reference
 
@@ -35,11 +35,11 @@ are older than this config; the balance pass before it failed six.
 | Enemy armor | + 0.35 × stage | on top of the enemy's own |
 | Hero per level | +8.5% HP, +7.5% ATK | level 16 at the end of a first-try run |
 | XP | 42 + 9 × stage (+60 on a boss) | next level at 40 + 26 × level |
-| Boons | 3 offered after each win | weights common 5 · rare 2.6 · epic 1.1 |
-| Ultimate | 2/s + 30% of damage dealt + 5% of damage taken | 100 = Ready; resets at every fight |
-| Enrage | after 30 s | all damage +8% per second after that: ×2.6 at 50 s, ×3.4 at 60 s |
+| Boons | 3 offered after each win | weights common 5 · rare 2.6 · epic 1.1; defensive ones (HP, armour/reduction, Titan Blood's HP) diminish with each copy: 100%, 62%, 45%, 35%… |
+| Ultimate | 2/s + 30% of damage dealt + 5% of damage taken | 100 = Ready; resets at every fight; at most one cast per 5 s; charge rate capped at 1.6× |
+| Enrage | after 30 s | all damage +8% per second after that: ×2.6 at 50 s, ×3.4 at 60 s; applied after armour, so it is the one pressure a tank cannot mitigate |
 | Rally | +20% HP and ATK per defeat | capped at 8×; 30 defeats reach 7×; resets on a win or on leaving |
-| Logic revision | 1 | bumped when `combat.ts`/`state.ts` logic changes; part of the config id |
+| Logic revision | 2 | bumped when `combat.ts`/`state.ts` logic changes; part of the config id |
 | Clock | 0.75× real time at 1× | `TIME_SCALE` in `src/main.ts`; the speed button doubles it. Every duration in this file is game time |
 
 Class data changed since launch: the Warden's ATK 23 → 26 and attack interval 1.75 → 1.6 s (its
@@ -103,15 +103,15 @@ to move — and moving a target is a decision, recorded here.
 | Target | Wants | Why | On this config |
 |---|---|---|---|
 | Regular finishes | ≥ 95% of runs, each class | A relaxed auto-battler: any boon, press the button, see the ending | ok |
-| Bosses occasionally need a retry | first-try 50–90%, each class | "Bosses occasionally require a retry": above 90% they never do, below 50% the boss is a wall | **fails**: Pyromancer 61% and Shadowblade 84% are in band; Warden and Spiritcaller 100% |
+| Bosses occasionally need a retry | first-try 50–90%, each class | "Bosses occasionally require a retry": above 90% they never do, below 50% the boss is a wall | **fails**: Pyromancer 49% and Shadowblade 74% are in band; Warden 99% and Spiritcaller 98% |
 | Normal stages flow | first-try ≥ 90%, each class | Retries belong to bosses | ok |
 | Nobody gets stuck | 0 walled runs, every tier | "Retry as many times as you like" and no way to drop a boon: a wall means abandoning the run | ok (Idle finishes 100%) |
-| The ultimate is there to be used | Ready in ≥ 75% of normal and ≥ 95% of boss fights, each class | It is the one in-combat decision; a button that never glows is not a decision | ok: 80–93% normal, 100% boss |
+| The ultimate is there to be used | Ready in ≥ 75% of normal and ≥ 95% of boss fights, each class | It is the one in-combat decision; a button that never glows is not a decision | ok: 80–93% normal, 100% boss; 1.3–3.3 casts per fight |
 | Pressing it changes something | boss first-try ≥ 8 points above Casual (class mean) | If never touching it changes no outcome, the decision is decorative | ok: 60.8 points |
-| The reward screen counts | Idle: ≥ 2 more retries per run, or ≥ 10 points fewer finishes | The other decision has to count — but never cost the run (see above) | ok: 52 vs 1 retry |
+| The reward screen counts | Idle: ≥ 2 more retries per run, or ≥ 10 points fewer finishes | The other decision has to count — but never cost the run (see above) | ok: 53 vs 1 retry |
 | Normal fights are readable | mean 6–30 s, each class | Long enough to see the skills, short enough not to reach for the speed button. Game time: ×1.33 on screen at the default pace | ok |
-| Boss fights are set pieces | mean 14–60 s, each class | Longer than a normal fight, and short enough to want to try again after a loss. The floor is 14 s because the mean over 40 seeds moves by about half a second | ok: Warden 49.8 s, Pyromancer 15.3 s |
-| Classes feel alike in length | boss duration max ÷ min ≤ 2 | No class should take twice as long as another | **fails**: 3.25× (Warden 49.8 s, Pyromancer 15.3 s) |
+| Boss fights are set pieces | mean 14–60 s, each class | Longer than a normal fight, and short enough to want to try again after a loss. The floor is 14 s because the mean over 40 seeds moves by about half a second | ok: Warden 49.6 s, Pyromancer 16.9 s |
+| Classes feel alike in length | boss duration max ÷ min ≤ 2 | No class should take twice as long as another | **fails**: 2.62× (Warden 49.6 s, Pyromancer 16.9 s) |
 | The doc is current | Status hash = current | Results are only true for the config they were measured on | ok |
 
 ## Current results
@@ -124,22 +124,22 @@ of fights in which the ultimate reached Ready at least once (N = normal stages, 
 
 | Tier | Class | Finishes | Retries/run | Walled | Boss 1st | Normal 1st | Ult ≥ 1 N · B | ults/f | Normal | Boss | Boss p90 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Idle | Warden | 100% | 38.8 | 0 | 0% | 94% | 93% · 100% | 0.0 | 26.7 s | 38.3 s | 39.1 s |
-| Idle | Pyromancer | 100% | 75.2 | 0 | 0% | 66% | 83% · 92% | 0.0 | 15.7 s | 0.0 s | 0.0 s |
-| Idle | Shadowblade | 100% | 56.7 | 0 | 0% | 79% | 91% · 72% | 0.0 | 16.8 s | 31.9 s | 31.9 s |
-| Idle | Spiritcaller | 100% | 42.8 | 0 | 0% | 86% | 80% · 60% | 0.0 | 23.3 s | 40.6 s | 40.6 s |
-| Casual | Warden | 100% | 3.6 | 0 | 51% | 100% | 92% · 100% | 0.0 | 17.7 s | 44.7 s | 55.6 s |
-| Casual | Pyromancer | 100% | 14.8 | 0 | 1% | 100% | 88% · 100% | 0.0 | 11.4 s | 30.2 s | 33.0 s |
-| Casual | Shadowblade | 100% | 8.3 | 0 | 16% | 100% | 92% · 100% | 0.0 | 11.9 s | 31.4 s | 37.9 s |
-| Casual | Spiritcaller | 100% | 7.9 | 0 | 26% | 100% | 80% · 100% | 0.0 | 16.7 s | 43.8 s | 53.5 s |
-| Regular | Warden | 100% | 0.0 | 0 | 100% | 100% | 92% · 100% | 4.0 | 17.5 s | 49.8 s | 60.0 s |
-| Regular | Pyromancer | 100% | 2.3 | 0 | 61% | 100% | 89% · 100% | 1.5 | 6.5 s | 15.3 s | 22.2 s |
-| Regular | Shadowblade | 100% | 0.9 | 0 | 84% | 100% | 92% · 100% | 1.9 | 7.3 s | 16.3 s | 21.8 s |
-| Regular | Spiritcaller | 100% | 0.1 | 0 | 99% | 100% | 80% · 100% | 2.2 | 11.7 s | 38.4 s | 48.5 s |
-| Sharp | Warden | 100% | 0.0 | 0 | 100% | 100% | 93% · 100% | 0.2 | 23.8 s | 58.4 s | 73.9 s |
-| Sharp | Pyromancer | 100% | 1.4 | 0 | 76% | 100% | 90% · 100% | 0.8 | 6.5 s | 8.5 s | 13.9 s |
-| Sharp | Shadowblade | 100% | 1.1 | 0 | 80% | 100% | 92% · 100% | 1.4 | 6.5 s | 13.1 s | 19.6 s |
-| Sharp | Spiritcaller | 100% | 0.1 | 0 | 98% | 100% | 80% · 100% | 1.3 | 19.3 s | 41.3 s | 50.8 s |
+| Idle | Warden | 100% | 43.4 | 0 | 0% | 88% | 93% · 100% | 0.0 | 26.1 s | 0.0 s | 0.0 s |
+| Idle | Pyromancer | 100% | 72.9 | 0 | 0% | 66% | 83% · 94% | 0.0 | 15.7 s | 0.0 s | 0.0 s |
+| Idle | Shadowblade | 100% | 55.0 | 0 | 0% | 79% | 91% · 69% | 0.0 | 16.8 s | 31.9 s | 31.9 s |
+| Idle | Spiritcaller | 100% | 41.4 | 0 | 0% | 86% | 80% · 65% | 0.0 | 23.3 s | 40.6 s | 40.6 s |
+| Casual | Warden | 100% | 6.5 | 0 | 24% | 100% | 92% · 100% | 0.0 | 18.0 s | 42.5 s | 50.5 s |
+| Casual | Pyromancer | 100% | 15.4 | 0 | 1% | 100% | 88% · 100% | 0.0 | 11.3 s | 28.7 s | 33.0 s |
+| Casual | Shadowblade | 100% | 8.4 | 0 | 14% | 100% | 92% · 100% | 0.0 | 11.9 s | 30.8 s | 37.9 s |
+| Casual | Spiritcaller | 100% | 8.0 | 0 | 20% | 100% | 80% · 100% | 0.0 | 16.7 s | 41.4 s | 48.1 s |
+| Regular | Warden | 100% | 0.1 | 0 | 99% | 100% | 93% · 100% | 3.3 | 17.7 s | 49.6 s | 60.4 s |
+| Regular | Pyromancer | 100% | 3.3 | 0 | 49% | 100% | 89% · 100% | 1.3 | 6.6 s | 16.9 s | 23.6 s |
+| Regular | Shadowblade | 100% | 1.5 | 0 | 74% | 100% | 92% · 100% | 1.7 | 8.0 s | 19.2 s | 25.9 s |
+| Regular | Spiritcaller | 100% | 0.1 | 0 | 98% | 100% | 80% · 100% | 2.1 | 11.9 s | 39.7 s | 50.2 s |
+| Sharp | Warden | 100% | 0.1 | 0 | 98% | 100% | 93% · 100% | 0.6 | 24.1 s | 59.3 s | 75.2 s |
+| Sharp | Pyromancer | 100% | 2.1 | 0 | 65% | 100% | 90% · 100% | 0.7 | 6.6 s | 9.6 s | 15.9 s |
+| Sharp | Shadowblade | 100% | 1.6 | 0 | 73% | 100% | 92% · 100% | 1.3 | 6.5 s | 15.7 s | 21.1 s |
+| Sharp | Spiritcaller | 100% | 0.2 | 0 | 96% | 100% | 81% · 100% | 1.2 | 19.6 s | 43.4 s | 54.6 s |
 
 Every run ends at level 16. No Regular, Casual or Sharp run ever retried a normal stage. Three
 things to read off this table: the ultimate is now decisive (Casual's boss first-try is 2–23%
@@ -154,30 +154,30 @@ First-try win % · mean duration · % of fights with the ultimate Ready at least
 | Stage | Realm | Boss | Warden | Pyromancer | Shadowblade | Spiritcaller |
 |---|---|---|---|---|---|---|
 | 1 | Ashen Reach |  | 100% · 7.3s · 0% | 100% · 6.8s · 0% | 100% · 7.0s · 0% | 100% · 8.2s · 0% |
-| 2 | Ashen Reach |  | 100% · 15.8s · 97% | 100% · 9.2s · 28% | 100% · 10.1s · 72% | 100% · 11.5s · 0% |
-| 3 | Ashen Reach |  | 100% · 14.3s · 92% | 100% · 8.7s · 65% | 100% · 9.4s · 89% | 100% · 11.7s · 1% |
-| 4 | Ashen Reach |  | 100% · 20.0s · 100% | 100% · 8.6s · 100% | 100% · 11.6s · 100% | 100% · 13.3s · 100% |
-| 5 | Ashen Reach | BOSS | 100% · 38.9s · 100% | 51% · 18.0s · 100% | 86% · 17.8s · 100% | 100% · 33.2s · 100% |
-| 6 | Whisperwood |  | 100% · 8.4s · 58% | 100% · 6.5s · 77% | 100% · 6.9s · 83% | 100% · 9.0s · 4% |
-| 7 | Whisperwood |  | 100% · 17.1s · 100% | 100% · 7.7s · 100% | 100% · 7.7s · 100% | 100% · 12.7s · 98% |
-| 8 | Whisperwood |  | 100% · 19.2s · 100% | 100% · 7.9s · 100% | 100% · 7.4s · 100% | 100% · 13.3s · 100% |
-| 9 | Whisperwood |  | 100% · 22.5s · 100% | 100% · 7.8s · 100% | 100% · 11.2s · 100% | 100% · 14.6s · 100% |
-| 10 | Whisperwood | BOSS | 100% · 48.9s · 100% | 27% · 14.6s · 100% | 64% · 17.1s · 100% | 99% · 38.5s · 100% |
-| 11 | Frostveil Peaks |  | 100% · 12.3s · 100% | 100% · 4.6s · 100% | 100% · 5.2s · 100% | 100% · 9.2s · 97% |
-| 12 | Frostveil Peaks |  | 100% · 20.6s · 100% | 100% · 7.9s · 100% | 100% · 6.9s · 100% | 100% · 14.8s · 100% |
-| 13 | Frostveil Peaks |  | 100% · 22.5s · 100% | 100% · 7.6s · 100% | 100% · 8.0s · 100% | 100% · 15.3s · 100% |
-| 14 | Frostveil Peaks |  | 100% · 26.4s · 100% | 100% · 7.6s · 100% | 100% · 9.8s · 100% | 100% · 15.7s · 100% |
-| 15 | Frostveil Peaks | BOSS | 100% · 54.2s · 100% | 74% · 17.1s · 100% | 86% · 17.8s · 100% | 99% · 43.0s · 100% |
-| 16 | Sunken Sanctum |  | 100% · 13.5s · 100% | 100% · 3.9s · 100% | 100% · 4.6s · 100% | 100% · 8.7s · 100% |
-| 17 | Sunken Sanctum |  | 100% · 20.7s · 100% | 100% · 6.3s · 100% | 100% · 6.9s · 100% | 100% · 13.3s · 100% |
-| 18 | Sunken Sanctum |  | 100% · 18.0s · 100% | 100% · 5.8s · 100% | 100% · 6.0s · 100% | 100% · 12.1s · 100% |
-| 19 | Sunken Sanctum |  | 100% · 24.6s · 100% | 100% · 5.9s · 100% | 100% · 8.1s · 100% | 100% · 13.0s · 100% |
-| 20 | Sunken Sanctum | BOSS | 100% · 49.6s · 100% | 84% · 13.9s · 100% | 93% · 14.6s · 100% | 100% · 35.4s · 100% |
-| 21 | Ember Throne |  | 100% · 13.3s · 100% | 100% · 3.4s · 100% | 100% · 4.5s · 100% | 100% · 8.2s · 100% |
-| 22 | Ember Throne |  | 100% · 16.3s · 100% | 100% · 4.6s · 100% | 100% · 4.4s · 100% | 100% · 10.0s · 100% |
-| 23 | Ember Throne |  | 100% · 17.0s · 100% | 100% · 4.1s · 100% | 100% · 4.8s · 100% | 100% · 9.8s · 100% |
-| 24 | Ember Throne |  | 100% · 20.7s · 100% | 100% · 4.0s · 100% | 100% · 6.2s · 100% | 100% · 10.3s · 100% |
-| 25 | Ember Throne | BOSS | 100% · 57.5s · 100% | 71% · 13.6s · 100% | 89% · 14.3s · 100% | 96% · 42.2s · 100% |
+| 2 | Ashen Reach |  | 100% · 15.8s · 96% | 100% · 9.2s · 28% | 100% · 10.1s · 72% | 100% · 11.5s · 0% |
+| 3 | Ashen Reach |  | 100% · 14.2s · 91% | 100% · 8.7s · 65% | 100% · 9.4s · 89% | 100% · 11.7s · 1% |
+| 4 | Ashen Reach |  | 100% · 20.2s · 100% | 100% · 8.6s · 100% | 100% · 11.6s · 100% | 100% · 13.3s · 100% |
+| 5 | Ashen Reach | BOSS | 100% · 39.3s · 100% | 51% · 17.9s · 100% | 86% · 17.8s · 100% | 100% · 33.1s · 100% |
+| 6 | Whisperwood |  | 100% · 8.6s · 64% | 100% · 6.6s · 77% | 100% · 6.9s · 83% | 100% · 9.0s · 4% |
+| 7 | Whisperwood |  | 100% · 17.2s · 100% | 100% · 7.7s · 100% | 100% · 7.8s · 100% | 100% · 12.7s · 98% |
+| 8 | Whisperwood |  | 100% · 19.5s · 100% | 100% · 7.9s · 100% | 100% · 7.5s · 100% | 100% · 13.3s · 100% |
+| 9 | Whisperwood |  | 100% · 22.7s · 100% | 100% · 7.8s · 100% | 100% · 11.4s · 100% | 100% · 14.5s · 100% |
+| 10 | Whisperwood | BOSS | 99% · 48.5s · 100% | 22% · 14.8s · 100% | 57% · 18.1s · 100% | 99% · 38.8s · 100% |
+| 11 | Frostveil Peaks |  | 100% · 12.5s · 100% | 100% · 4.5s · 100% | 100% · 5.2s · 100% | 100% · 9.3s · 98% |
+| 12 | Frostveil Peaks |  | 100% · 21.0s · 100% | 100% · 8.1s · 100% | 100% · 6.9s · 100% | 100% · 15.0s · 100% |
+| 13 | Frostveil Peaks |  | 100% · 22.6s · 100% | 100% · 7.7s · 100% | 100% · 7.9s · 100% | 100% · 15.4s · 100% |
+| 14 | Frostveil Peaks |  | 100% · 27.3s · 100% | 100% · 7.7s · 100% | 100% · 10.0s · 100% | 100% · 15.6s · 100% |
+| 15 | Frostveil Peaks | BOSS | 100% · 54.3s · 100% | 53% · 17.4s · 100% | 75% · 19.5s · 100% | 99% · 43.7s · 100% |
+| 16 | Sunken Sanctum |  | 100% · 13.7s · 100% | 100% · 3.8s · 100% | 100% · 5.1s · 100% | 100% · 8.8s · 100% |
+| 17 | Sunken Sanctum |  | 100% · 20.8s · 100% | 100% · 6.4s · 100% | 100% · 7.1s · 100% | 100% · 13.5s · 100% |
+| 18 | Sunken Sanctum |  | 100% · 18.7s · 100% | 100% · 6.1s · 100% | 100% · 6.3s · 100% | 100% · 12.3s · 100% |
+| 19 | Sunken Sanctum |  | 100% · 24.7s · 100% | 100% · 6.6s · 100% | 100% · 9.9s · 100% | 100% · 13.3s · 100% |
+| 20 | Sunken Sanctum | BOSS | 100% · 49.0s · 100% | 69% · 15.8s · 100% | 90% · 18.5s · 100% | 99% · 37.5s · 100% |
+| 21 | Ember Throne |  | 100% · 13.3s · 100% | 100% · 3.4s · 100% | 100% · 6.2s · 100% | 100% · 8.9s · 100% |
+| 22 | Ember Throne |  | 100% · 16.0s · 100% | 100% · 4.8s · 100% | 100% · 6.3s · 100% | 100% · 10.7s · 100% |
+| 23 | Ember Throne |  | 100% · 17.1s · 100% | 100% · 4.6s · 100% | 100% · 6.8s · 100% | 100% · 10.7s · 100% |
+| 24 | Ember Throne |  | 100% · 20.5s · 100% | 100% · 4.8s · 100% | 100% · 10.0s · 100% | 100% · 10.5s · 100% |
+| 25 | Ember Throne | BOSS | 97% · 57.0s · 100% | 51% · 17.8s · 100% | 64% · 22.8s · 100% | 92% · 46.1s · 100% |
 
 The ultimate is Ready in every boss fight and in almost every fight from stage 4 on; only the
 Spiritcaller's first realm mostly goes without (it has the least damage to charge from). The
@@ -186,35 +186,86 @@ boons have accumulated; the Pyromancer's hardest is the Whisperwood boss at 31%.
 
 ## Findings
 
-1. **Bosses occasionally need a retry, for two classes.** Pyromancer 61% and Shadowblade 84%
-   first-try on bosses, 2.3 and 0.9 retries per run; normal stages are still never replayed.
-   Warden and Spiritcaller remain at 100% (see 5).
-2. **The ultimate is there, and it matters.** Ready in 80–93% of normal fights and every boss
-   fight; never pressing it costs 57.1 points of boss first-try (class mean). A Casual
-   Pyromancer retries 14.8 times a run, a Casual Shadowblade 8.3.
-3. **Nobody gets stuck.** With Rally at +20% per defeat the boonless Idle tier finishes every
-   run (it walls on the final boss at +12%). It is a grind, not a trap: 32–75 retries a run.
-4. **The Warden's boss fights are 52 s, not 73** (p90 100 → 64 s), and every boss fight on
-   Regular is under 60 s. The enrage at 30 s fires on the Warden's and Spiritcaller's boss
-   fights and nowhere else.
-5. **The Warden and the Spiritcaller never lose a boss.** No boss-ATK value up to ×3.5 of the
-   old one moves them. Their ultimate is the mechanism: damage taken charges it, so the Warden
-   casts Unbreakable 4.0 times a fight, and each cast heals 25% and shields 35%. That is class
-   design, not a number. The redesign below made the *boonless* Warden genuinely vulnerable —
-   Idle boss first-try fell from 18% to 0% — but boons still carry a Regular run to 100%.
-6. **The Warden takes 3.2 times as long.** 49.8 s boss fights against the Pyromancer's 15.3 s
-   (3.25×). Its damage bump and the reflection in Radiant Ward brought that down from 3.7×.
-7. **The always-ready ultimate makes burst classes' late normal fights very short.** Pyromancer
-   stages 21–24 are 3.3–4.9 s; the class mean of 6.5 s passes the target only because the early
-   game is longer. A 280% AoE meteor against late waves of ~1,500 HP is most of the fight.
-   `enemy.hpPerStage` 0.2 adds about half a second and cost two other targets (tried and
-   reverted); this is the Pyromancer's kit.
-8. **Unchanged from the first measurement:** level is a restatement of stage (every run ends at
-   16); flat regeneration is dead late; boon choice does not change outcomes (Sharp ≈ Regular),
-   though Sharp's fitted Pyromancer halves its boss fights (8.5 s) and its Sharp Warden holds a
-   defensive ultimate it never needs (0.2 casts per fight, 64.5 s boss fights).
+1. **Bosses need a retry for two classes, barely for a third.** Pyromancer 49% and Shadowblade 74%
+   first-try on bosses, 3.3 and 1.5 retries per run; Spiritcaller 98%. Normal stages are never
+   replayed by anyone. Warden stays at 99% (see 5 and *The Warden investigation*).
+2. **The ultimate is a moment now.** Ready in 80–93% of normal fights and every boss fight, but
+   cast 1.3–3.3 times per fight instead of 4–42: a 5 s minimum interval and a cap on charge rate
+   replaced a rotation. Never pressing it costs 61.8 points of boss first-try (class mean).
+3. **Nobody gets stuck.** Rally at +20% per defeat carries the boonless Idle tier through every
+   run (41–73 retries a run). It is a grind, not a trap.
+4. **Boss fights are 15–50 s for everyone** and the enrage now applies after armour, so it is
+   the one pressure a tank cannot mitigate. Warden p90 is 60 s.
+5. **The Warden almost never loses, and it is not a number.** A boon-carrying Warden beats the
+   Ashen King with a median lowest-health of 93%: it is never in danger. Nine tuning attempts are
+   recorded under *The Warden investigation*; the conclusion is that the kit is multiplicatively
+   defensive and 24 multiplicative boons on top of it pass anything a flat-damage boss can do.
+6. **Parity 2.62×** (Warden 49.6 s, Pyromancer 16.9 s). Down from 3.25×: the ultimate interval
+   removed the burst classes' extra casts, and halving the Ashen King's swing evened the fights.
+7. **The always-ready ultimate still makes burst classes' late normal fights short.** Pyromancer
+   stages 21–24 run 3.3–4.9 s against a class mean of 6.6 s. Her kit; see *Open questions*.
+8. **Two cliffs were found and removed.** (a) The ultimate had no interval and charge rate was
+   uncapped: one Warden run reached `ultRate` 3.05 and cast every 1.4 s (18–42 casts a boss
+   fight, shields worth 630–1470% of its health). (b) The Ashen King hit for 248 against a
+   no-boon health pool of 265–865: three swings and any squishy hero was dead, so the fight had
+   no middle, only "instant" or "comfortable". Its swing is now 130 at twice the rate.
+9. **Unchanged:** level is a restatement of stage (every run ends at 16); flat regeneration is
+   dead late; boon choice still does not change outcomes (Sharp ≈ Regular).
 
-## Ability and logic changes (2026-11-24, `4465c252`)
+## The ultimate is a moment, not a rotation (2026-11-24, `23a09cbb`)
+
+Instrumenting a boon-carrying Warden on the Ashen King showed 18, 21 and 42 ultimate casts in
+three 50-second fights. The cause was `ultimate` charge: 2/s passive plus 30% of damage dealt and
+5% taken, with **`ultRate` uncapped** (crit, dodge and damage reduction all had caps; it did not),
+so a run that picked Ember Heart five times charged at 3.05× and cast every 1.4 s. Two changes:
+
+- `hero.ultRateCap` 1.6, applied in `statsFor` like the other caps.
+- `ultimate.minInterval` 5 s: a charge is a gate, not a rate. `useUltimate` refuses before it.
+
+| Sweep (Regular, 40 seeds) | Warden / Pyromancer / Shadowblade / Spiritcaller boss first-try | Boss fight lengths |
+|---|---|---|
+| before | 100 / 61 / 84 / 99 % | 48 / 15 / 16 / 39 s |
+| interval 10 s | 100 / 21 / 54 / 79 % | 48 / 20 / 23 / 41 s |
+| interval 5 s (applied) | 100 / 45 / 74 / 94 % | 49 / 16 / 20 / 40 s |
+
+Ten seconds made the Pyromancer's meteor too rare (21 %); five keeps her in band. The interval
+also took parity from 3.25× to 2.62× by removing the burst classes' extra casts.
+
+## The Warden investigation (2026-11-24)
+
+The brief was "make the class losable; it is too easy and imba". Nine experiments, each measured
+on the Regular tier with 40 seeds unless noted. All were reverted except where marked **kept**.
+
+| # | Change | Warden boss first-try | Verdict |
+|---|---|---|---|
+| 1 | `ultimate.chargeTaken` 0.05 → 0.01 | 100 % | the Warden charges from damage *dealt*, not taken |
+| 2 | Unbreakable heal 25 → 15 %, shield 35 → 25 % | 100 % | it casts 4–7 times; per-cast size is not the lever |
+| 3 | `ultRate` 0.6 / 0.35 / 0.30 | 100 / 100 / 98 % | and Ready in only 46–54 % of normal fights: breaks another target |
+| 4 | Radiant Ward (heal/shield) → shield + reflect 45 % + damage | 100 % | **kept** (casts 1–2 → 3, parity −0.17, boonless Warden now loses the King) but not for this |
+| 5 | Base armour 20 → 14, reduction 8 → 4 %, regen 0.6 → 0.3; ult 18 %/25 % | 100 % | |
+| 6 | Defensive boons diminish with copies (1/(1+0.25n), then 1/(1+0.6n)) | 99 % | **kept** at 0.6: it removes the HP-stack win button (24 Iron Hide 100 → 0 %) and makes 24-pick defence a choice, not a guarantee |
+| 7 | Ashen King's Crownfire deals 6–15 % of the target's max HP | 99 % | **reverted**: it walled the boonless Pyromancer (84 of 100) and dropped her to 42 %, because flat share-of-HP hurts small pools more than large ones |
+| 8 | Ashen King atk 21 → 11, speed 2.2 → 1.1 s (same DPS, half the swing) | 99 % | **kept**: Pyromancer 37 → 44 %, Shadowblade 64 → 71 %; removes the one-shot cliff |
+| 9 | Enrage applied after armour; ramp 0.08 → 0.25; enrage at 20 s | 96–98 % | **kept** after-armour (it is the right rule for a tank) and 30 s / 0.08 |
+
+The decisive measurement is not a win rate: across 40 boon-carrying Wardens the **median lowest
+health reached in the Ashen King fight was 93 %** (worst 51 %, best 100 %). The class does not
+win narrowly; it is never in danger. The boon matrix explains why — against the King, eight
+copies of almost any single boon lose (0 %), eight copies of Titan Blood or Arcane Font win
+(100 %), and *any* random 24 picks win. The outcome is decided by multiplicative stacking past a
+line, and no flat-damage boss has a middle.
+
+What would actually work is design, not tuning, and it is a decision for the maintainer:
+
+- **Share-of-max-HP damage as a boss mechanic** — on every boss ability, not one, and weighted so
+  it bites long fights (the Warden's) rather than short ones (the Pyromancer's). Experiment 7 was
+  too timid and flat; a duration-weighted version was not tried.
+- **The Warden's sustain becomes reaction, not aura** — a large shield that only matters for the
+  few seconds after a boss ability, and less base mitigation, so "tank and grind" is a losing plan.
+- **A Warden-specific enrage** — bosses ramp faster only in fights that last, which the squishy
+  classes' fights do not. Experiments 9a/9b show a global ramp is not enough.
+
+## Ability and logic changes (2026-11-24, `4465c252`; superseded by the two sections above)
 
 A player reported that one of the Warden's abilities "doesn't seem to work". It didn't cast at
 all. `tryCastAbility` skipped any ability with a heal or shield and no damage unless the hero was
@@ -255,10 +306,10 @@ worst parity — so that slot is now the reflection it promises:
 | Icon | sun (twin of Dawnbreaker's) | armour |
 
 Reflection also scales with the enemy: the harder a boss hits, the more the Warden answers, which
-is the opposite of a heal. Effects at 100 seeds: casts per fight 1–2 → 3, Warden boss fights
+is the opposite of a heal. Effects at the time (100 seeds): casts per fight 1–2 → 3, Warden boss fights
 52.4 → 49.8 s, parity 3.42 → 3.25×, and a boonless Warden now **loses** the final boss (Idle boss
-first-try 18% → 0%, retries 32 → 39). A Regular Warden still wins every boss, because its
-ultimate — 25% heal plus a 35% shield, four casts a fight — is the sustain engine now.
+first-try 18% → 0%). A Regular Warden still won every boss; the ultimate's rate was the next thing
+found (see *The ultimate is a moment*).
 
 Because this changed behaviour without changing a single number in `src/balance.ts`, the config id
 now hashes a `logic` revision too, so a logic fix alone marks this file out of date.
@@ -338,17 +389,16 @@ doc or a broken target blocks the deploy.
 
 ## Open questions
 
-- **The Warden's ultimate is now its sustain engine.** Unbreakable is cast 4.0 times a fight (damage
-  taken charges it), healing 25% and shielding 35% each time. It is the reason a Regular Warden still
-  wins every boss while a boonless one cannot. Charging less from damage taken, or a smaller heal,
-  would make the Warden losable — and would make its ultimate a decision instead of a rhythm.
-- **Radiant Ward still only fires 1–2 times a fight**, because `wantsUtility()` will not cast a
-  shield at a hero whose shield is already above 20% of its health, and the Warden takes so little
-  damage that the shield rarely drops. That is correct use of the skill, but it is a symptom: the
-  real problem is that the Warden is never hurt (finding 5).
-- **Boss HP against the Pyromancer.** Her boss fight sits on the pacing floor. `enemy.bossHpPerStage`
-  0.28 puts it at 18 s but drops her boss first-try to 44%, below the 50% floor; 0.24 is the largest
-  value that keeps both. One number cannot satisfy both targets for her.
+- **The Warden.** See *The Warden investigation*: nine tuning levers failed; the class needs a
+  design change (share-of-HP boss damage weighted to long fights, sustain-as-reaction, or a
+  Warden-specific enrage). Until then it is the one class a boss cannot beat, and a player who
+  picks it is choosing the easy mode whether or not the game says so.
+- **Radiant Ward's shield gate.** `wantsUtility()` will not cast a shield above 20% of health; a
+  Warden's shield rarely drops that far. Correct for the skill, a symptom of the Warden never being
+  hurt.
+- **Boss HP against the Pyromancer.** `enemy.bossHpPerStage` 0.28 would lengthen her fights but drops
+  her boss first-try below the 50% floor at the old ultimate rate. Re-sweep after any ultimate change;
+  she is at 49% now, on the floor.
 - **Human playtest, more than before.** Bosses hit ~3.5× harder than at launch. Is a Pyromancer
   retrying twice a run right for a "relaxed" game? Are her 3–5 s late fights too quick to read,
   even at the slower clock? Is a Warden boss fight at 50 s a set piece or a slog?
@@ -359,8 +409,8 @@ doc or a broken target blocks the deploy.
   meant to hold for them, it needs a mechanic (share-of-max-HP damage, healing reduction, a
   dispel), not a stat. Their ultimates are also up constantly because damage taken and thorns
   charge them; charging less from damage taken would make the Warden's ultimate a decision again.
-- **Parity.** Either the Warden's damage kit grows to about double, or the target moves to
-  about 3. A Warden player currently spends three times as long on bosses as a Pyromancer.
+- **Parity.** 2.62×. Either the Warden's damage kit grows by about a third, or the target moves to
+  about 3. A Warden player spends two and a half times as long on bosses as a Pyromancer.
 - **Burst versus the ultimate.** Making the ultimate always available shortened the burst
   classes' fights; keeping them readable needs either weaker ultimates or more enemy HP, and
   more enemy HP costs the boonless floor. The two targets pull against each other.
@@ -376,6 +426,17 @@ doc or a broken target blocks the deploy.
   wrong about what the class needs.
 
 ## History
+
+**2026-11-24 — the ultimate as a moment, the Ashen King's swing, diminishing defence (`4465c252` →
+`23a09cbb`).** Charge rate was uncapped and the ultimate had no interval: a Warden with five Ember
+Hearts cast every 1.4 s, 42 times in one boss fight. `hero.ultRateCap` 1.6 and `ultimate.minInterval`
+5 s make it 1.3–3.3 casts a fight. The Ashen King's hit went 248 → 130 at twice the rate (same DPS),
+which turned "instant death or comfortable" into a fight for the squishy classes. The enrage applies
+after armour. Defensive boons diminish with copies (1/(1+0.6n)). Ultimate and Radiant Ward thorns
+trimmed (40 %×7 s → 20 %×4 s; 45 %×6 s → 25 %×5 s) after 39 % of the Warden's boss damage turned out
+to be the boss hitting itself. Net: Pyromancer boss first-try 61 → 49 %, Shadowblade 84 → 74 %,
+Spiritcaller 99 → 98 %, Warden 100 → 99 %; parity 3.25 → 2.62×. Nine attempts to make the Warden
+losable are recorded under *The Warden investigation*; the class needs a design change.
 
 **2026-11-24 — Radiant Ward rebuilt as a reflection ability (`a394ed00` → `4465c252`).** The gate
 fix let it cast, but a heal/shield has little to do for a hero sitting at 94–100% of its health, so

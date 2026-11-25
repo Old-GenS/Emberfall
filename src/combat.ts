@@ -139,6 +139,8 @@ export class Battle {
   chargeRate = 1;
   private wolfCooldownPrevent = false;
   private enrageAnnounced = false;
+  /** Battle time at which the next ultimate may be cast (see BALANCE.ultimate.minInterval). */
+  private ultReadyAt = 0;
 
   constructor(heroClass: ClassId, heroStats: Stats, wave: EnemyInstance[], globalStage: number, handlers: CombatHandlers = {}) {
     this.globalStage = globalStage;
@@ -453,14 +455,16 @@ export class Battle {
       crit = opts.forceCrit || Math.random() < cc;
     }
     let dmg = raw * rand(0.93, 1.07);
-    // The air itself begins to burn after a minute — no battle can stall forever.
-    if (this.time > BALANCE.combat.enrageAt) dmg *= 1 + (this.time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp;
     if (crit) {
       let cm = source.stats.critMult;
       if (source.classId === 'shadowblade') cm += BALANCE.combat.shadowbladeCritBonus;
       dmg *= cm;
     }
     dmg *= 100 / (100 + target.stats.armor);
+    // The air itself begins to burn after a while — no battle can stall forever. The enrage is
+    // applied after armour on purpose: it is the one pressure a heavily armoured hero cannot
+    // mitigate away, which is what makes a long boss fight a risk for the Warden rather than a grind.
+    if (this.time > BALANCE.combat.enrageAt) dmg *= 1 + (this.time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp;
     dmg *= 1 - target.stats.damageReduction;
     dmg = Math.max(1, dmg);
     if (target.shield > 0) {
@@ -525,6 +529,10 @@ export class Battle {
   useUltimate(): boolean {
     if (this.ended || !this.hero.alive) return false;
     if (this.hero.ultCharge < 100) return false;
+    // A charge is a gate, not a rate: without this, stacked charge-rate boons turned the ultimate
+    // into a rotation (a Warden cast it every 1.4 s and never lost a boss).
+    if (this.time < this.ultReadyAt) return false;
+    this.ultReadyAt = this.time + BALANCE.ultimate.minInterval;
     const ult = this.hero.ultimate!;
     this.hero.ultCharge = 0;
     this.emit({ type: 'cast', source: this.hero, ability: ult, ult: true });

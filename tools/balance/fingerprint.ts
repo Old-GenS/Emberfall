@@ -39,7 +39,8 @@ export function balancePayload(): string {
     balance: BALANCE,
     classes: mechanical(CLASSES),
     locations: mechanical(LOCATIONS),
-    boons: boonEffects(REFERENCE),
+    // The first and the third copy: a boon that diminishes with copies shows up in the second.
+    boons: { first: boonEffects(REFERENCE, 0), third: boonEffects(REFERENCE, 2) },
   });
 }
 

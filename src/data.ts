@@ -78,14 +78,14 @@ export const CLASSES: ClassDef[] = [
     tagline: 'An immovable flame in a falling world.',
     lore: 'Last of the Dawnwatch, sworn to hold the gate until the sun returns. The shield is not a tool. It is a promise.',
     colors: { main: '#ffcf7a', glow: '#ffae42', cloth: '#3b5c9e', accent: '#e8eefc' },
-    stats: baseStats({ maxHp: 380, atk: 26, armor: 20, crit: 0.09, critMult: 1.5, speed: 1.6, dodge: 0.02, regen: 0.6, damageReduction: 0.08 }),
+    stats: baseStats({ maxHp: 380, atk: 26, armor: 14, crit: 0.09, critMult: 1.5, speed: 1.6, dodge: 0.02, regen: 0.3, damageReduction: 0.04 }),
     passive: { name: 'Bulwark', desc: 'Takes 8% less damage from all sources.', icon: 'shield' },
     abilities: [
       { id: 'shield-slam', name: 'Shield Slam', desc: 'Crush one foe for 130% ATK and stun it for 1.2s.', icon: 'hammer', cooldown: 6.5, target: 'enemy', power: 1.3, shield: 0.05, effect: { kind: 'stun', duration: 1.2, power: 1 } },
-      { id: 'radiant-ward', name: 'Radiant Ward', desc: 'Shield 12%. For 6s, reflect 45% of damage taken and deal 25% more damage.', icon: 'armor', cooldown: 9, target: 'self', shield: 0.12, selfEffects: [{ kind: 'thorns', duration: 6, power: 0.45 }, { kind: 'empower', duration: 6, power: 1.25 }] },
+      { id: 'radiant-ward', name: 'Radiant Ward', desc: 'Shield 12%. For 5s, reflect 25% of damage taken and deal 25% more damage.', icon: 'armor', cooldown: 9, target: 'self', shield: 0.12, selfEffects: [{ kind: 'thorns', duration: 5, power: 0.25 }, { kind: 'empower', duration: 6, power: 1.25 }] },
       { id: 'dawnbreaker', name: 'Dawnbreaker', desc: 'Holy shock hits all foes for 95% ATK and burns them.', icon: 'star', cooldown: 9.5, target: 'allEnemies', power: 0.95, effect: { kind: 'burn', duration: 4, power: 0.14 } },
     ],
-    ultimate: { id: 'unbreakable', name: 'Unbreakable', desc: 'Gain a 35% shield, heal 25%, and reflect 40% damage for 7s.', icon: 'shield', cooldown: 0, target: 'self', heal: 0.25, shield: 0.35, selfEffect: { kind: 'thorns', duration: 7, power: 0.4 } },
+    ultimate: { id: 'unbreakable', name: 'Unbreakable', desc: 'Gain a 25% shield, heal 18%, and reflect 20% of damage taken for 4s.', icon: 'shield', cooldown: 0, target: 'self', heal: 0.18, shield: 0.25, selfEffect: { kind: 'thorns', duration: 4, power: 0.2 } },
   },
   {
     id: 'pyromancer',
@@ -148,27 +148,34 @@ export interface BoonDef {
   icon: IconName;
   rarity: 'common' | 'rare' | 'epic';
   classes?: ClassId[];
-  apply: (s: Stats) => void;
+  /** `copies` is how many of this boon the hero already has (0 for the first): diminishing boons scale on it. */
+  apply: (s: Stats, copies: number) => void;
 }
 
+/* Defensive boons stack with diminishing returns: the first is full value, the fifth is worth about
+   half. Uncapped, 24 picks of them made the Warden unlosable (it took 2-7% of its health in a boss
+   fight) while offence picks made it lose, so defence was the only correct choice. */
+const defenceStack = (ids: string[], id: string): number => ids.filter(x => x === id).length;
+const diminish = (n: number): number => 1 / (1 + 0.25 * n);
+
 export const BOONS: BoonDef[] = [
-  { id: 'iron-hide', name: 'Iron Hide', desc: '+18% maximum health.', icon: 'armor', rarity: 'common', apply: s => { s.maxHp *= 1.18; } },
+  { id: 'iron-hide', name: 'Iron Hide', desc: '+18% maximum health (further copies +12%, +9%, …).', icon: 'armor', rarity: 'common', apply: (s, copies) => { s.maxHp *= 1 + 0.18 * diminish(copies); } },
   { id: 'keen-edge', name: 'Keen Edge', desc: '+15% attack power.', icon: 'sword', rarity: 'common', apply: s => { s.atk *= 1.15; } },
   { id: 'executioner', name: 'Executioner', desc: '+8% critical chance.', icon: 'skull', rarity: 'rare', apply: s => { s.crit += 0.08; } },
   { id: 'deep-wounds', name: 'Deep Wounds', desc: '+35% critical damage.', icon: 'drop', rarity: 'rare', apply: s => { s.critMult += 0.35; } },
   { id: 'vampiric', name: 'Crimson Thirst', desc: '+7% lifesteal from all damage.', icon: 'heart', rarity: 'rare', apply: s => { s.lifesteal += 0.07; } },
   { id: 'swiftness', name: 'Quickstep', desc: '+12% attack speed.', icon: 'wind', rarity: 'common', apply: s => { s.speed *= 0.88; } },
-  { id: 'bulwark-plate', name: 'Bulwark Plate', desc: '+14 armor and 3% damage reduction.', icon: 'shield', rarity: 'common', apply: s => { s.armor += 14; s.damageReduction += 0.03; } },
+  { id: 'bulwark-plate', name: 'Bulwark Plate', desc: '+14 armor and 3% damage reduction (further copies diminish).', icon: 'shield', rarity: 'common', apply: (s, copies) => { const d = diminish(copies); s.armor += 14 * d; s.damageReduction += 0.03 * d; } },
   { id: 'arcane-font', name: 'Arcane Font', desc: '+22% ability & ultimate power.', icon: 'star', rarity: 'rare', apply: s => { s.abilityPower *= 1.22; } },
   { id: 'second-wind', name: 'Second Wind', desc: 'Regenerate +1.6 HP per second.', icon: 'leaf', rarity: 'common', apply: s => { s.regen += 1.6; } },
   { id: 'fleet-foot', name: 'Fleet Foot', desc: '+5% dodge chance.', icon: 'wind', rarity: 'common', apply: s => { s.dodge += 0.05; } },
   { id: 'ember-heart', name: 'Ember Heart', desc: '+25% ultimate charge rate.', icon: 'flame', rarity: 'rare', apply: s => { s.ultRate *= 1.25; } },
-  { id: 'titan-blood', name: 'Titan Blood', desc: '+30% max HP, +8% attack.', icon: 'crown', rarity: 'epic', apply: s => { s.maxHp *= 1.3; s.atk *= 1.08; } },
+  { id: 'titan-blood', name: 'Titan Blood', desc: '+30% max HP, +8% attack (HP diminishes with copies).', icon: 'crown', rarity: 'epic', apply: (s, copies) => { s.maxHp *= 1 + 0.3 * diminish(copies); s.atk *= 1.08; } },
   { id: 'assassins-creed', name: "Assassin's Creed", desc: '+12% crit chance, +20% crit damage.', icon: 'dagger', rarity: 'epic', apply: s => { s.crit += 0.12; s.critMult += 0.2; } },
-  { id: 'thornmail', name: 'Thornmail', desc: '+25 armor and 4% damage reduction.', icon: 'shield', rarity: 'rare', classes: ['warden'], apply: s => { s.armor += 25; s.damageReduction += 0.04; } },
+  { id: 'thornmail', name: 'Thornmail', desc: '+25 armor and 4% damage reduction (further copies diminish).', icon: 'shield', rarity: 'rare', classes: ['warden'], apply: (s, copies) => { const d = diminish(copies); s.armor += 25 * d; s.damageReduction += 0.04 * d; } },
   { id: 'phoenix-spark', name: 'Phoenix Spark', desc: '+30% ability power, +10% attack.', icon: 'flame', rarity: 'epic', classes: ['pyromancer'], apply: s => { s.abilityPower *= 1.3; s.atk *= 1.1; } },
   { id: 'night-veil', name: 'Night Veil', desc: '+10% dodge, +10% attack speed.', icon: 'smoke', rarity: 'epic', classes: ['shadowblade'], apply: s => { s.dodge += 0.1; s.speed *= 0.9; } },
-  { id: 'world-root', name: 'World Root', desc: '+2.5 regen, +12% max HP.', icon: 'leaf', rarity: 'epic', classes: ['spiritcaller'], apply: s => { s.regen += 2.5; s.maxHp *= 1.12; } },
+  { id: 'world-root', name: 'World Root', desc: '+2.5 regen, +12% max HP (HP diminishes with copies).', icon: 'leaf', rarity: 'epic', classes: ['spiritcaller'], apply: (s, copies) => { s.regen += 2.5; s.maxHp *= 1 + 0.12 * diminish(copies); } },
 ];
 
 export const boonById = (id: string): BoonDef => BOONS.find(b => b.id === id)!;
@@ -292,7 +299,7 @@ export const LOCATIONS: LocationDef[] = [
       { id: 'ash-seraph', name: 'Ash Seraph', body: 'seraph', colors: { main: '#ff9ad9', dark: '#3d1236', glow: '#ffd9f2' }, hp: 118, atk: 13, armor: 5, speed: 2.5, abilities: [enemyAbility('cinder-hymn', 'Cinder Hymn', 'Wings of falling ash.', 8, 1.4, { target: 'allEnemies', effect: { kind: 'burn', duration: 4, power: 0.14 } })] },
       { id: 'dusk-wyrm', name: 'Dusk Wyrm', body: 'wyrm', colors: { main: '#7d64e8', dark: '#1b1030', glow: '#ff9aef' }, hp: 205, atk: 16, armor: 8, speed: 2.6, scale: 1.2, abilities: [enemyAbility('breath', 'Dusk Breath', 'A sigh that unmakes.', 9, 1.8, { effect: { kind: 'burn', duration: 4, power: 0.16 } })] },
     ],
-    boss: { id: 'ashen-king', name: 'The Ashen King', body: 'king', colors: { main: '#ffcf7a', dark: '#1a0b1f', glow: '#ff4d6d' }, hp: 820, atk: 21, armor: 12, speed: 2.2, scale: 1.6, boss: true, abilities: [enemyAbility('crown-fire', 'Crownfire', 'The crown answers.', 8, 2.0, { target: 'allEnemies', effect: { kind: 'burn', duration: 5, power: 0.2 } }), enemyAbility('kingslaw', 'King\'s Law', 'Reality kneels.', 13, 1.6, { effect: { kind: 'stun', duration: 1.1, power: 1 } }), enemyAbility('rekindle', 'Rekindle', 'He refuses the end.', 20, 0, { target: 'self', heal: 0.08, selfEffect: { kind: 'empower', duration: 6, power: 1.3 } })] },
+    boss: { id: 'ashen-king', name: 'The Ashen King', body: 'king', colors: { main: '#ffcf7a', dark: '#1a0b1f', glow: '#ff4d6d' }, hp: 820, atk: 11, armor: 12, speed: 1.1, scale: 1.6, boss: true, abilities: [enemyAbility('crown-fire', 'Crownfire', 'The crown answers.', 8, 2.0, { target: 'allEnemies',  effect: { kind: 'burn', duration: 5, power: 0.2 } }), enemyAbility('kingslaw', 'King\'s Law', 'Reality kneels.', 13, 1.6, { effect: { kind: 'stun', duration: 1.1, power: 1 } }), enemyAbility('rekindle', 'Rekindle', 'He refuses the end.', 20, 0, { target: 'self', heal: 0.08, selfEffect: { kind: 'empower', duration: 6, power: 1.3 } })] },
   },
 ];
 

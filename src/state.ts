@@ -109,15 +109,20 @@ export function statsFor(cls: ClassDef, level: number, boonIds: string[]): Stats
     maxHp: Math.round(cls.stats.maxHp * (1 + lvl * BALANCE.hero.hpPerLevel)),
     atk: Math.round(cls.stats.atk * (1 + lvl * BALANCE.hero.atkPerLevel) * 10) / 10,
   };
+  const seen = new Map<string, number>();
   for (const id of boonIds) {
     const b = ALL_BOONS.find(x => x.id === id);
-    if (b) b.apply(s);
+    if (!b) continue;
+    const copies = seen.get(id) ?? 0;
+    seen.set(id, copies + 1);
+    b.apply(s, copies);
   }
   s.maxHp = Math.round(s.maxHp);
   s.atk = Math.round(s.atk * 10) / 10;
   s.crit = Math.min(BALANCE.hero.critCap, s.crit);
   s.dodge = Math.min(BALANCE.hero.dodgeCap, s.dodge);
   s.damageReduction = Math.min(BALANCE.hero.damageReductionCap, s.damageReduction);
+  s.ultRate = Math.min(BALANCE.hero.ultRateCap, s.ultRate);
   return s;
 }
 

@@ -33,14 +33,18 @@ export const BALANCE = {
   hero: {
     hpPerLevel: 0.085, atkPerLevel: 0.075, maxLevel: 50,
     critCap: 0.75, dodgeCap: 0.6, damageReductionCap: 0.55,
+    // Boons stack without limit, and uncapped charge rate let a Warden cast its ultimate every
+    // 1.4 s; the other multiplicative stats are capped for the same reason.
+    ultRateCap: 1.6,
   },
   xp: {
     toNextBase: 40, toNextPerLevel: 26,      // XP for the next level: base + level × per
     stageBase: 42, perStage: 9, bossBonus: 60,  // XP for a stage: base + stage × per, + bonus on a boss
   },
   boons: { offered: 3, weight: { common: 5, rare: 2.6, epic: 1.1 } },
-  /** Ultimate charge: passive per second, plus this share of damage dealt and of damage taken. 100 = Ready. */
-  ultimate: { passiveCharge: 2, chargeDealt: 0.3, chargeTaken: 0.05 },
+  /** Ultimate charge: passive per second, plus this share of damage dealt and of damage taken. 100 = Ready.
+ *  `minInterval` is a floor on the gap between two casts, whatever the charge rate. */
+  ultimate: { passiveCharge: 2, chargeDealt: 0.3, chargeTaken: 0.05, minInterval: 5 },
   combat: {
     enrageAt: 30, enrageRamp: 0.08,          // after this many seconds, all damage grows by ramp per second
     bossStunFactor: 0.55,                    // stuns last this share of their time on a boss

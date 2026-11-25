@@ -74,7 +74,7 @@ const RARITY_PRIOR: Record<BoonDef['rarity'], number> = { epic: 0.3, rare: 0.15,
 /** How much `boon` improves `stats` for `cls`: the weighted, scaled stat deltas plus a rarity prior. */
 export function scoreBoon(cls: ClassId, stats: Stats, boon: BoonDef): number {
   const after: Stats = { ...stats };
-  boon.apply(after);
+  boon.apply(after, 0);
   let score = RARITY_PRIOR[boon.rarity];
   const w = CLASS_WEIGHTS[cls];
   (Object.keys(STAT_SCALE) as (keyof Stats)[]).forEach((k) => {
@@ -93,8 +93,8 @@ export function chooseBoon(policy: BoonPolicy, cls: ClassId, stats: Stats, offer
 }
 
 /** Every boon's measured effect on a reference hero, for the config fingerprint (boons are code, not data). */
-export function boonEffects(reference: Stats): Record<string, Stats> {
+export function boonEffects(reference: Stats, copies = 0): Record<string, Stats> {
   const out: Record<string, Stats> = {};
-  for (const b of BOONS) { const s: Stats = { ...reference }; b.apply(s); out[b.id] = s; }
+  for (const b of BOONS) { const s: Stats = { ...reference }; b.apply(s, copies); out[b.id] = s; }
   return out;
 }
