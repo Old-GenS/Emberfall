@@ -539,7 +539,7 @@ export class Battle {
       side: 'ally', name: 'Spirit Wolf', body: 'wolf',
       colors: { main: '#8dffc2', dark: '#2d5a3f', glow: '#e7ffd4' },
       stats: {
-        maxHp: 1, atk: u.stats.atk * 0.65, armor: 0, crit: 0.15, critMult: 1.5,
+        maxHp: Math.round(u.stats.maxHp * 0.3), atk: u.stats.atk * 0.65, armor: 6, crit: 0.15, critMult: 1.5,
         speed: 1.15, dodge: 0, regen: 0, lifesteal: 0, damageReduction: 0,
         abilityPower: 1, ultRate: 1,
       },

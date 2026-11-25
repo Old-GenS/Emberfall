@@ -202,6 +202,16 @@ function buildBackground(loc: LocationDef): HTMLCanvasElement {
       const x = rand() * 960;
       g.beginPath(); g.moveTo(x, 0); g.quadraticCurveTo(x + 12, 50, x - 4, 90 + rand() * 80); g.stroke();
     }
+    // moon through the canopy
+    const mg = g.createRadialGradient(505, 92, 8, 505, 92, 140);
+    mg.addColorStop(0, 'rgba(220,255,228,0.5)');
+    mg.addColorStop(0.25, 'rgba(180,255,205,0.18)');
+    mg.addColorStop(1, 'rgba(140,255,190,0)');
+    g.fillStyle = mg; g.fillRect(330, 0, 350, 260);
+    g.fillStyle = 'rgba(226,255,233,0.75)';
+    g.beginPath(); g.arc(505, 92, 34, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(150,220,170,0.25)';
+    g.beginPath(); g.arc(494, 84, 9, 0, Math.PI * 2); g.arc(514, 102, 6, 0, Math.PI * 2); g.fill();
     g.fillStyle = p.near; g.fillRect(0, 430, 960, 110);
     for (let i = 0; i < 10; i++) { // mushrooms
       const x = rand() * 960, y = 440 + rand() * 60;
@@ -269,6 +279,23 @@ function buildBackground(loc: LocationDef): HTMLCanvasElement {
       const x = rand() * 960, y = 440 + rand() * 90;
       g.beginPath(); g.ellipse(x, y, 20 + rand() * 60, 2, 0, 0, Math.PI * 2); g.stroke();
     }
+    // coral & kelp silhouettes
+    for (let i = 0; i < 9; i++) {
+      const x = 20 + rand() * 920, h = 30 + rand() * 90;
+      g.strokeStyle = `rgba(${40 + rand() * 40},${140 + rand() * 60},${130 + rand() * 60},${0.25 + rand() * 0.3})`;
+      g.lineWidth = 2 + rand() * 3;
+      g.beginPath();
+      g.moveTo(x, 540);
+      g.quadraticCurveTo(x + Math.sin(i) * 16, 540 - h * 0.6, x + Math.cos(i * 2) * 24, 540 - h);
+      g.stroke();
+      g.fillStyle = 'rgba(120,255,235,0.12)';
+      g.beginPath(); g.arc(x + Math.cos(i * 2) * 24, 540 - h, 5 + rand() * 4, 0, Math.PI * 2); g.fill();
+    }
+    g.strokeStyle = 'rgba(150,255,240,0.35)'; g.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const a = -Math.PI / 2 + (i - 1.5) * 0.55;
+      g.beginPath(); g.arc(480, 300, 70, a - 0.09, a + 0.09); g.stroke();
+    }
   } else {
     // void stars + throne
     for (let i = 0; i < 4; i++) {
@@ -332,6 +359,7 @@ export class SceneRenderer {
   private ambient: Ambient[] = [];
   private shake = 0;
   private flash = 0;
+  private floatStacks = new Map<number, { time: number; count: number }>();
   private flashColor = '255,255,255';
   private time = 0;
   speed = 1;
@@ -403,11 +431,13 @@ export class SceneRenderer {
       case 'damage': {
         const pos = this.unitPosition(e.target);
         const color = e.kind === 'dot' ? '#b6ff9d' : e.crit ? '#ffd977' : e.kind === 'thorns' ? '#c8b4ff' : '#fff3e0';
-        this.floaters.push({
-          x: pos.x + (Math.random() - 0.5) * 30, y: pos.y - 150 * pos.scale - 55,
-          text: e.crit ? `${Math.round(e.amount)}!` : `${Math.round(e.amount)}`,
-          color, life: 1.1, maxLife: 1.1, size: e.crit ? 30 : e.kind === 'ult' ? 26 : 20, vy: e.crit ? -58 : -44,
-        });
+        if (e.amount < 0.5) {
+          this.damageFloater(e.target.uid, pos.x, pos.y - 150 * pos.scale - 55, 'blocked', '#ffe09a', 15, -28);
+        } else {
+          this.damageFloater(e.target.uid, pos.x, pos.y - 150 * pos.scale - 55,
+            e.crit ? `${Math.round(e.amount)}!` : `${Math.round(e.amount)}`,
+            color, e.crit ? 30 : e.kind === 'ult' ? 26 : 20, e.crit ? -58 : -44);
+        }
         const burst = e.kind === 'dot' ? 3 : e.kind === 'ult' ? 18 : e.crit ? 12 : 6;
         for (let i = 0; i < burst; i++) {
           const a = Math.random() * Math.PI * 2;
@@ -430,7 +460,7 @@ export class SceneRenderer {
       }
       case 'heal': {
         const pos = this.unitPosition(e.target);
-        this.floaters.push({ x: pos.x + (Math.random() - 0.5) * 20, y: pos.y - 150 * pos.scale - 55, text: `+${Math.round(e.amount)}`, color: '#8dffc2', life: 1.1, maxLife: 1.1, size: 20, vy: -46 });
+        this.damageFloater(e.target.uid, pos.x, pos.y - 150 * pos.scale - 55, `+${Math.round(e.amount)}`, '#8dffc2', 20, -46);
         for (let i = 0; i < 8; i++) {
           this.particles.push({
             x: pos.x + (Math.random() - 0.5) * 50, y: pos.y - 30 - Math.random() * 70,
@@ -455,7 +485,7 @@ export class SceneRenderer {
       }
       case 'dodge': {
         const pos = this.unitPosition(e.target);
-        this.floaters.push({ x: pos.x, y: pos.y - 150 * pos.scale - 55, text: 'MISS', color: '#c8c3d8', life: 0.9, maxLife: 0.9, size: 18, vy: -30 });
+        this.damageFloater(e.target.uid, pos.x, pos.y - 150 * pos.scale - 55, 'MISS', '#c8c3d8', 18, -30);
         break;
       }
       case 'cast': {
@@ -505,6 +535,19 @@ export class SceneRenderer {
         this.flashColor = e.victory ? '255,220,150' : '180,40,60';
         break;
     }
+  }
+
+
+  private damageFloater(uid: number, x: number, y: number, text: string, color: string, size: number, vy: number): void {
+    const now = this.time;
+    const prev = this.floatStacks.get(uid);
+    const count = prev && now - prev.time < 0.5 ? prev.count + 1 : 0;
+    this.floatStacks.set(uid, { time: now, count });
+    this.floaters.push({
+      x: x + (Math.random() - 0.5) * 34,
+      y: y - Math.min(count, 4) * 21,
+      text, color, life: 1.1, maxLife: 1.1, size: Math.max(15, size - count * 1.5), vy,
+    });
   }
 
   private floaterAt(x: number, y: number, text: string, color: string, size: number): void {
@@ -975,6 +1018,21 @@ export class SceneRenderer {
         ctx.beginPath(); ctx.moveTo(40, -76); ctx.lineTo(40, -96); ctx.lineTo(48, -80); ctx.fill();
         ctx.fillStyle = c.dark;
         ctx.beginPath(); ctx.ellipse(49, -60, 12, 7, 0.2, 0, Math.PI * 2); ctx.fill();
+        if (u.boss) {
+          ctx.strokeStyle = glow; ctx.lineWidth = 3; ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(30, -78); ctx.quadraticCurveTo(22, -96, 26, -118);
+          ctx.moveTo(26, -98); ctx.quadraticCurveTo(12, -108, 8, -122);
+          ctx.moveTo(24, -106); ctx.quadraticCurveTo(32, -116, 30, -128);
+          ctx.moveTo(44, -78); ctx.quadraticCurveTo(54, -98, 50, -120);
+          ctx.moveTo(50, -100); ctx.quadraticCurveTo(64, -108, 68, -124);
+          ctx.moveTo(48, -108); ctx.quadraticCurveTo(40, -118, 42, -130);
+          ctx.stroke();
+          ctx.fillStyle = glow;
+          [[26,-118],[8,-122],[30,-128],[50,-120],[68,-124],[42,-130]].forEach(([x,y]) => {
+            ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+          });
+        }
         eye(38, -70, 3);
         // tail
         ctx.strokeStyle = c.main; ctx.lineWidth = 7;

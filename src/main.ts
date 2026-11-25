@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  TOTAL_STAGES, buildWave, classById, stageInfo, type ClassId, type IconName,
+  BOONS, TOTAL_STAGES, buildWave, classById, stageInfo, type ClassId, type IconName,
 } from './data';
 import { Battle, type CombatEvent } from './combat';
 import { SceneRenderer } from './art';
@@ -11,7 +11,7 @@ import {
 } from './state';
 import {
   howToHTML, icon, renderBattle, renderClassSelect, renderMap, renderReward,
-  renderTitle, renderVictory,
+  renderTitle, renderVictory, toastHTML,
 } from './ui';
 
 const app = document.getElementById('app')!;
@@ -158,8 +158,15 @@ function startBattle(keepRally = false): void {
   renderer.setBattle(battle);
   const boss = save.stage % 5 === 4;
   audio.playMusic(info.location.music as ThemeId, boss);
-  if (boss) setTimeout(() => sfx('boss'), 200);
+  if (boss) setTimeout(() => sfx('boss'), 150);
   bindBattleControls();
+  if (boss) {
+    const intro = document.createElement('div');
+    intro.className = 'boss-intro';
+    intro.innerHTML = `<div class="bi-kicker">Final Trial</div><h2>${info.location.boss.name}</h2><div class="bi-sub">${info.location.name}</div>`;
+    document.getElementById('arena')?.appendChild(intro);
+    setTimeout(() => intro.remove(), 2700);
+  }
   overlayShown = false;
   paused = false;
   speed = 1;
@@ -407,13 +414,19 @@ function showRewardScreen(): void {
 }
 
 function chooseBoon(id: string): void {
+  const boon = BOONS.find(b => b.id === id);
   applyBoon(id);
   sfx('select');
-  const b = pickBoonChoices; // no-op to keep types
-  void b;
   pendingResult = null;
   screen = 'map';
   renderScreen();
+  if (boon) showToast(`${boon.name} acquired`);
+}
+
+function showToast(text: string): void {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  app.insertAdjacentHTML('beforeend', toastHTML(text));
+  setTimeout(() => document.querySelectorAll('.toast').forEach(t => t.remove()), 2600);
 }
 
 /* ------------------------------- navigation ------------------------------- */
