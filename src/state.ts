@@ -23,9 +23,23 @@ export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return defaultSave();
-    const data = JSON.parse(raw) as SaveData;
+    const data = JSON.parse(raw) as Partial<SaveData>;
     if (data.version !== 1) return defaultSave();
-    return { ...defaultSave(), ...data };
+    const base = defaultSave();
+    const classId = data.classId && CLASSES.some(c => c.id === data.classId) ? data.classId : null;
+    const boons = Array.isArray(data.boons) ? data.boons.filter(id => typeof id === 'string' && ALL_BOONS.some(b => b.id === id)) : [];
+    return {
+      ...base,
+      ...data,
+      classId,
+      level: Math.min(50, Math.max(1, Number(data.level) || 1)),
+      xp: Math.max(0, Number(data.xp) || 0),
+      stage: Math.min(25, Math.max(0, Math.floor(Number(data.stage) || 0))),
+      boons,
+      sound: data.sound !== false,
+      music: data.music !== false,
+      seenIntro: data.seenIntro === true,
+    };
   } catch {
     return defaultSave();
   }
