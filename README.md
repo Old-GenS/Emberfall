@@ -69,7 +69,7 @@ src/
 
 ## Deployment
 
-Pushes to `main` build and deploy through `.github/workflows/deploy.yml`. In the repository settings, set **Pages → Source** to **GitHub Actions**. The Vite base is relative (`./`), so it works from a project subpath.
+Pushes to `main` (or `master`) build and deploy through `.github/workflows/deploy.yml`. In the repository settings, set **Pages → Source** to **GitHub Actions**. The Vite base is relative (`./`), so it works from a project subpath.
 
 ## Notes
 
