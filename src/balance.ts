@@ -9,6 +9,12 @@
  * They are stable mechanics rather than tuning knobs; if you change one, refresh the doc by hand.
  */
 export const BALANCE = {
+  /**
+   * Bumped whenever combat or progression *logic* changes without any number here changing
+   * (src/combat.ts, src/state.ts, the battle flow in src/main.ts). The doc's config id covers logic
+   * as well as numbers, so a logic fix still marks docs/balance.md as out of date.
+   */
+  logic: 1,
   /** Enemy waves. `stage` runs 0..24; five stages per realm, the fifth is the boss. */
   enemy: {
     hpPerStage: 0.155,                       // normal enemies: HP × (1 + stage × this)

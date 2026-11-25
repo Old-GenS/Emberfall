@@ -119,6 +119,10 @@ export interface CombatHandlers {
   onEvent?: (e: CombatEvent) => void;
 }
 
+/** Effects a cleanse removes (the same list castAbility filters with). */
+const CLEANSABLE: StatusKind[] = ['burn', 'poison', 'bleed', 'stun', 'slow'];
+
+/** Damage variance, tick lengths and the summon's stats are mechanics, not tuning knobs. */
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
@@ -303,15 +307,10 @@ export class Battle {
       if (u.abilityCds[i] > 0) continue;
       if (ab.summon) {
         if (this.allies.some(a => a.alive && a.isSummon)) continue;
-        if (u.abilityCds[i] > 0) continue;
       }
-      // heal utility: only when useful, else do damage abilities
-      const hpPct = u.hp / u.stats.maxHp;
-      if ((ab.heal || ab.shield) && !ab.power) {
-        if (hpPct > 0.72 && u.abilities.length > 1) continue;
-      }
-      if ((ab.heal || ab.shield) && ab.power && hpPct > 0.9) {
-        // still allow damage/heal hybrid
+      // An ability that deals no damage has to do something to be worth casting.
+      if (!(ab.power ?? 0) && (ab.heal || ab.shield || ab.cleanse || ab.selfEffect || ab.selfEffects)) {
+        if (!this.wantsUtility(u, ab)) continue;
       }
       // self-buff avoid casting immediately at full overlap
       const buffs = [...(ab.selfEffect ? [ab.selfEffect] : []), ...(ab.selfEffects ?? [])];
@@ -320,6 +319,24 @@ export class Battle {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Whether a heal/shield/buff ability is worth casting right now.
+   *
+   * This used to be "only when HP is below 72%", which made the Warden's Radiant Ward never fire at
+   * all: a Warden sits at 94-95% of its health, so its heal/shield skill was dead for the whole game.
+   * The same rule held back the Pyromancer's Cinder Veil (+35% attack, +25% haste) and the
+   * Shadowblade's Smoke Step, whose buff is the point of the ability rather than a side effect.
+   */
+  private wantsUtility(u: Unit, ab: AbilityDef): boolean {
+    if (u.hp / u.stats.maxHp <= 0.72) return true;
+    // A shield is worth refreshing long before the health bar matters.
+    if ((ab.shield ?? 0) > 0 && u.shield < u.stats.maxHp * 0.2) return true;
+    if (ab.cleanse && u.effects.some(e => CLEANSABLE.includes(e.kind))) return true;
+    // An offensive or defensive buff is the reason to cast: use it on cooldown.
+    const buffs = [...(ab.selfEffect ? [ab.selfEffect] : []), ...(ab.selfEffects ?? [])];
+    return buffs.some(s => s.kind === 'empower' || s.kind === 'haste' || s.kind === 'dodge');
   }
 
   castAbility(u: Unit, ab: AbilityDef, abilityIndex = -1): void {

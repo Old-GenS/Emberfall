@@ -509,6 +509,11 @@ export class SceneRenderer {
         }
         if (isUlty) {
           this.floaters.push({ x: pos.x, y: pos.y - 170, text: e.ability.name.toUpperCase(), color: '#ffe2a8', life: 1.6, maxLife: 1.6, size: 22, vy: -14 });
+        } else if (e.source.side === 'hero') {
+          // Name the skill, under the hero's feet: above the head is where the damage numbers and
+          // the name plate already are, and the battle log is hidden on a phone, so without this a
+          // cast is only a ring (you could not tell Shield Slam from Dawnbreaker).
+          this.floaters.push({ x: pos.x, y: pos.y + 30, text: e.ability.name, color: col, life: 1.4, maxLife: 1.4, size: 14, vy: -12 });
         }
         break;
       }
