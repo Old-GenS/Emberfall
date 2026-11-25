@@ -1084,6 +1084,46 @@ export class SceneRenderer {
         ctx.globalAlpha = 1;
         break;
       }
+      case 'revenant': {
+        // drowned priest: tattered robe, coral growths, staff
+        const sway = Math.sin(this.time * 1.8 + u.uid) * 3;
+        ctx.fillStyle = c.dark;
+        ctx.beginPath(); ctx.moveTo(-26 + sway, 0); ctx.quadraticCurveTo(-22, -68, -14, -94); ctx.lineTo(16, -94); ctx.quadraticCurveTo(26, -60, 26 + sway, 0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = c.main; ctx.globalAlpha = 0.75;
+        ctx.beginPath(); ctx.moveTo(-16 + sway, 0); ctx.quadraticCurveTo(-12, -60, -8, -86); ctx.lineTo(10, -86); ctx.quadraticCurveTo(16, -50, 16 + sway, 0); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+        // tattered hem
+        ctx.fillStyle = c.dark;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath(); ctx.moveTo(-22 + i * 12, 0); ctx.lineTo(-16 + i * 12, -16 - (i % 2) * 8); ctx.lineTo(-8 + i * 12, 0); ctx.fill();
+        }
+        // hood + face
+        ctx.fillStyle = c.dark;
+        ctx.beginPath(); ctx.ellipse(0, -94, 20, 26, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#132b30';
+        ctx.beginPath(); ctx.ellipse(2, -90, 13, 17, 0, 0, Math.PI * 2); ctx.fill();
+        eye(-5, -93, 2.8); eye(8, -93, 2.8);
+        // coral halo / fins
+        ctx.strokeStyle = glow; ctx.globalAlpha = 0.5; ctx.lineWidth = 2.5;
+        for (let i = 0; i < 5; i++) {
+          const a = -Math.PI + i * 0.45;
+          ctx.beginPath(); ctx.moveTo(Math.cos(a) * 22, -94 + Math.sin(a) * 24);
+          ctx.quadraticCurveTo(Math.cos(a) * 38, -112 + Math.sin(a) * 10, Math.cos(a) * 46, -104 + Math.sin(a) * 18); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        // barnacle orbs
+        for (let i = 0; i < 4; i++) {
+          ctx.fillStyle = c.main;
+          ctx.beginPath(); ctx.arc(-12 + i * 9, -50 + Math.sin(this.time * 2 + i) * 3, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+        // staff
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(28, -110); ctx.lineTo(32, 16); ctx.stroke();
+        ctx.fillStyle = glow; ctx.shadowBlur = 14; ctx.shadowColor = glow;
+        ctx.beginPath(); ctx.arc(27, -116, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        break;
+      }
       case 'wisp': {
         ctx.shadowBlur = 24; ctx.shadowColor = glow;
         const g = ctx.createRadialGradient(0, -70, 4, 0, -70, 34);
@@ -1336,6 +1376,15 @@ export class SceneRenderer {
         ctx.fillStyle = bg;
         ctx.beginPath(); ctx.moveTo(-7, -8); ctx.lineTo(7, -8); ctx.lineTo(5, -84); ctx.lineTo(0, -104); ctx.lineTo(-5, -84); ctx.closePath(); ctx.fill();
         ctx.restore();
+        break;
+      }
+      default: {
+        ctx.fillStyle = c.dark;
+        ctx.beginPath(); ctx.ellipse(0, -50, 26, 34, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = c.main;
+        ctx.beginPath(); ctx.ellipse(0, -54, 17, 24, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(-5, -58, 2.5, 0, Math.PI * 2); ctx.arc(5, -58, 2.5, 0, Math.PI * 2); ctx.fill();
         break;
       }
     }

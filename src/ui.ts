@@ -157,7 +157,7 @@ function realmCard(loc: LocationDef, idx: number, save: SaveData): string {
     const cls = `stage-node${isDone ? ' done' : ''}${isNext ? ' next' : ''}${i === 4 ? ' boss-node' : ''}`;
     const title = `${i + 1}. ${name}${isNext ? ' — your next battle' : ''}`;
     if (isNext) {
-      return `<button class="${cls}" data-battle="${g}" title="${title}" aria-label="Fight: ${name}">${i === 4 ? icon('crown') : g + 1}</button>`;
+      return `<button class="${cls}" data-battle="${g}" title="${title}" aria-label="Fight: ${name}">${i === 4 ? icon('crown') : i + 1}</button>`;
     }
     return `<div class="${cls}" title="${title}">${isDone ? (i === 4 ? icon('crown') : '✓') : (i === 4 ? icon('crown') : i + 1)}</div>`;
   });
@@ -172,7 +172,7 @@ function realmCard(loc: LocationDef, idx: number, save: SaveData): string {
       </div>
       <p class="realm-blurb">${loc.blurb}</p>
       <div class="stage-track">${connectors}</div>
-      <div class="stage-name">${save.stage >= TOTAL_STAGES ? loc.stageNames[4] + ' — conquered' : locked ? 'Clear the previous realm to enter' : `Next: ${loc.stageNames[Math.max(0, Math.min(4, save.stage - base))]}`}</div>
+      <div class="stage-name">${base + 4 < save.stage || save.stage >= TOTAL_STAGES ? 'Realm conquered' : locked ? 'Clear the previous realm to enter' : `Next: ${loc.stageNames[Math.max(0, Math.min(4, save.stage - base))]}`}</div>
       ${isCurrent ? `<div class="quest-strip">
         <div class="quest-info"><span class="${save.stage % 5 === 4 ? 'tag boss-tag' : 'tag gold'}">${save.stage % 5 === 4 ? 'Boss Stage' : 'Stage ' + ((save.stage % 5) + 1)}</span><b>${stageInfo(save.stage).location.stageNames[save.stage % 5]}</b><span class="dot"></span><span>Rewards: <b>+${42 + save.stage * 9 + (save.stage % 5 === 4 ? 60 : 0)} XP</b> &amp; a boon</span></div>
         <button class="btn primary small" data-battle="${save.stage}">Enter Battle</button>
