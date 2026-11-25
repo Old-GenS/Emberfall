@@ -121,6 +121,7 @@ class AudioEngine {
     this.reverbGain.gain.value = 0.5;
     this.reverbGain.connect(this.reverb).connect(this.master);
     this.noiseBuf = this.makeNoise(1.5);
+    if (ctx.state === 'suspended') await ctx.resume();
     this.started = true;
     if (this.playing) this.startScheduler();
   }
