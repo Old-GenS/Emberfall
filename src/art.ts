@@ -575,17 +575,27 @@ export class SceneRenderer {
     if (!ctx) return;
     this.battle = battle;
     this.time += dt;
-    const scaleX = this.canvas.width / DESIGN_W;
-    const scaleY = this.canvas.height / DESIGN_H;
-    ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
-    ctx.clearRect(0, 0, DESIGN_W, DESIGN_H);
+    // Uniform scale, anchored to the bottom (the ground stays on the bottom edge) and centred
+    // sideways, with sky filling any spare canvas. The CSS keeps the arena at 16:9 so there is
+    // normally none; the old stretch-to-fit transform drew the scene wide whenever the arena was
+    // not exactly 16:9 (a height-capped desktop arena, a landscape phone).
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    const s = Math.min(cw / DESIGN_W, ch / DESIGN_H);
+    const ox = (cw - DESIGN_W * s) / 2;
+    const oy = ch - DESIGN_H * s;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = this.location?.palette.skyTop ?? '#0a0710';
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.setTransform(s, 0, 0, s, ox, oy);
 
     const shakeX = (Math.random() - 0.5) * this.shake;
     const shakeY = (Math.random() - 0.5) * this.shake;
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
-    if (this.bg) ctx.drawImage(this.bg, 0, 0);
+    // Drawn a few pixels oversized so the shake never shows the sky fill at the edges.
+    if (this.bg) ctx.drawImage(this.bg, -6, -6, DESIGN_W + 12, DESIGN_H + 12);
 
     // ambient particles
     const kind = this.location?.particle;

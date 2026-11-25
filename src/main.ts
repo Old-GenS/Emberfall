@@ -16,6 +16,8 @@ import {
 } from './ui';
 
 const app = document.getElementById('app')!;
+/** Phones and tablets: wording and layout differ (see the (hover: none) rules in style.css). */
+const touch = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
 
 type Screen = 'title' | 'classes' | 'map' | 'battle' | 'reward' | 'victory';
 let screen: Screen = 'title';
@@ -133,6 +135,7 @@ function closeModal(): void {
 /* ------------------------------- battle flow ------------------------------ */
 
 function stopBattle(): void {
+  document.body.classList.remove('in-battle');
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   battle = null;
@@ -147,6 +150,35 @@ function stopBattle(): void {
   logs = [];
 }
 
+/**
+ * Widest the battle shell can be with the arena (always 16:9) and both bars inside the viewport,
+ * so a fight never scrolls and the scene is never stretched. Measured, not computed: the bars'
+ * height depends on how they wrap, so it is read back after the first fit and fitted again.
+ */
+function fitBattleShell(): void {
+  if (screen !== 'battle') return;
+  const shell = document.querySelector<HTMLElement>('.battle-shell');
+  const arena = document.getElementById('arena');
+  const screenEl = shell?.parentElement;
+  if (!shell || !arena || !screenEl) return;
+  // The landscape layout sizes the arena by height in CSS and puts the bars beside it.
+  if (window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches) {
+    shell.style.removeProperty('--battle-fit');
+    return;
+  }
+  const cs = getComputedStyle(screenEl);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  shell.style.removeProperty('--battle-fit');
+  let chrome = shell.offsetHeight - arena.offsetHeight;
+  for (let pass = 0; pass < 2; pass++) {
+    const avail = window.innerHeight - padY - chrome;
+    const fit = Math.floor(Math.min(screenEl.clientWidth - padX, Math.max(160, (avail * 16) / 9)));
+    shell.style.setProperty('--battle-fit', `${fit}px`);
+    chrome = shell.offsetHeight - arena.offsetHeight;
+  }
+}
+
 function startBattle(keepRally = false): void {
   const save = getSave();
   const carryRally = rally;
@@ -157,6 +189,8 @@ function startBattle(keepRally = false): void {
   const wave = buildWave(save.stage);
   screen = 'battle';
   render(renderBattle({ save, cls, stage: save.stage, stats: heroStats() }));
+  document.body.classList.add('in-battle');
+  fitBattleShell();
   const canvas = document.getElementById('battle-canvas') as HTMLCanvasElement;
   const arena = document.getElementById('arena')!;
   renderer = new SceneRenderer(canvas);
@@ -192,7 +226,9 @@ function showBattleHint(): void {
   updateSave({ seenIntro: true });
   const arena = document.getElementById('arena');
   if (!arena) return;
-  arena.insertAdjacentHTML('beforeend', `<div class="hint-banner" id="hint-banner">${icon('heart')}<span>Your skills fire automatically. When the ultimate glows, press it — or hit <b>Space</b>. Good luck.</span></div>`);
+  arena.insertAdjacentHTML('beforeend', `<div class="hint-banner" id="hint-banner">${icon('heart')}<span>${touch
+    ? 'Your skills fire automatically. When the ultimate glows, <b>tap it</b>. Good luck.'
+    : 'Your skills fire automatically. When the ultimate glows, press it — or hit <b>Space</b>. Good luck.'}</span></div>`);
   setTimeout(() => document.getElementById('hint-banner')?.remove(), 7500);
 }
 
@@ -366,12 +402,23 @@ function showResultOverlay(): void {
 
 function loop(now: number): void {
   if (!battle || !renderer) return;
-  const dt = Math.min(0.05, (now - lastFrame) / 1000);
+  // Real time since the last frame, capped so a tab that woke up does not fast-forward through a
+  // fight; dt is the visual step, capped at 50 ms as before.
+  const frame = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));
+  const dt = Math.min(0.05, frame);
   lastFrame = now;
   if (!paused) {
-    // One update per speed unit, not one update of dt * speed: Battle.update clamps a single step
-    // to 50 ms, so a doubled step was silently capped to ~1.5x at 30 fps and 1x at 20 fps.
-    for (let i = 0; i < speed; i++) battle.update(dt * TIME_SCALE);
+    // Step in slices of at most 50 ms until the frame's time is used up. Battle.update clamps a
+    // single step to 50 ms, so one update of dt * speed was capped to ~1.5x at 30 fps and lost
+    // time below 20 fps; slices keep the pace right on a slow phone and on the 2x button.
+    for (let i = 0; i < speed; i++) {
+      let remaining = frame;
+      while (remaining > 1e-6) {
+        const step = Math.min(0.05, remaining);
+        battle.update(step * TIME_SCALE);
+        remaining -= step;
+      }
+    }
   }
   renderer.draw(dt * (paused ? 0.2 : 1), battle);
   updateHud();
@@ -400,7 +447,7 @@ function updateHud(): void {
     ultBtn.classList.toggle('ready', ready);
     (ultBtn as HTMLButtonElement).disabled = !ready;
     ultWrap?.classList.toggle('ready', ready);
-    ultPct.textContent = ready ? 'Ready · press Space' : `Charging · ${pct}%`;
+    ultPct.textContent = ready ? (touch ? 'Ready · tap to release' : 'Ready · press Space') : `Charging · ${pct}%`;
     ultRing.style.strokeDashoffset = `${201 * (1 - pct / 100)}`;
   }
   for (let i = 0; i < hero.abilities.length; i++) {
@@ -614,6 +661,12 @@ document.addEventListener('keydown', (ev) => {
 // Prevent page scroll on space when battle is active
 window.addEventListener('keydown', (ev) => {
   if (ev.code === 'Space' && screen === 'battle') ev.preventDefault();
+});
+
+// Rotating the phone or resizing the window re-fits the battle, then the canvas follows the arena.
+window.addEventListener('resize', () => {
+  fitBattleShell();
+  renderer?.resize();
 });
 
 /* ---------------------------------- boot ---------------------------------- */

@@ -45,6 +45,7 @@ Requires Node 20+. Click once anywhere and the music begins (browser autoplay ru
 | `Space` or `1`–`3` | Release the ultimate when charged |
 | `Esc` | Pause / resume |
 | Speed button | Toggle 1× / 2× battle speed |
+| Phone | Portrait keeps the controls at the bottom of the screen; landscape puts them beside the scene. Skill and boon descriptions are shown inline instead of on hover |
 
 ## Tech
 

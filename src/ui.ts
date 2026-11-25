@@ -133,15 +133,20 @@ export function renderClassSelect(save: SaveData): string {
   </div>`;
 }
 
+/** Touch devices show some information inline instead of on hover (see style.css). */
+const touchDevice = (): boolean => typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
+
 function boonPills(ids: string[]): string {
-  if (!ids.length) return `<span style="font-size:10px;color:var(--faint)">No boons yet — clear a stage to earn one.</span>`;
+  if (!ids.length) return `<details class="boon-details" open><summary>Boons · 0</summary><div class="boon-list"><span style="font-size:10px;color:var(--faint)">No boons yet — clear a stage to earn one.</span></div></details>`;
   const counts: Record<string, number> = {};
   for (const id of ids) counts[id] = (counts[id] ?? 0) + 1;
-  return Object.entries(counts).map(([id, n]) => {
+  const pills = Object.entries(counts).map(([id, n]) => {
     const b = BOONS.find(x => x.id === id);
     if (!b) return '';
-    return `<span class="boon-pill" title="${b.name}: ${b.desc}">${icon(b.icon)}${b.name}${n > 1 ? ` ×${n}` : ''}</span>`;
+    return `<span class="boon-pill" title="${b.name}: ${b.desc}">${icon(b.icon)}${b.name}${n > 1 ? ` ×${n}` : ''}<span class="pd">${b.desc}</span></span>`;
   }).join('');
+  // On a phone the descriptions are inline, which makes the list long, so it starts folded there.
+  return `<details class="boon-details"${touchDevice() ? '' : ' open'}><summary>Boons · ${ids.length}</summary><div class="boon-list">${pills}</div></details>`;
 }
 
 function realmCard(loc: LocationDef, idx: number, save: SaveData): string {
@@ -212,7 +217,7 @@ export function renderMap(save: SaveData): string {
             <div class="mini-stat"><span>Armor</span><b>${Math.round(s.armor)}</b></div>
             <div class="mini-stat"><span>Crit</span><b>${Math.round(s.crit * 100)}%</b></div>
           </div>
-          <div class="boon-list">${boonPills(save.boons)}</div>
+          ${boonPills(save.boons)}
           <div class="actions">
             ${save.stage >= TOTAL_STAGES ? '<button class="btn primary" data-nav="victory">View Ending</button>' : `<button class="btn primary" data-battle="${save.stage}">${bossStage ? 'Face the Boss' : 'Next Battle'} &nbsp;→</button>`}
             <button class="btn ghost small" data-action="howto">How to Play</button>
@@ -357,8 +362,8 @@ export function howToHTML(): string {
       <h3>In Battle</h3>
       <ul>
         <li>Skills and basic attacks fire automatically. <b>Watch the cooldowns</b> on your skill bar.</li>
-        <li>Dealing and taking damage charges your <b>Ultimate</b>. When the button glows, press it — or hit <span class="kbd">Space</span>.</li>
-        <li>Use <span class="kbd">Esc</span> to pause, <span class="kbd">1</span>–<span class="kbd">3</span> to use your ultimate, and the speed button to fast-forward.</li>
+        <li>Dealing and taking damage charges your <b>Ultimate</b>. When the button glows, press it (or hit <span class="kbd">Space</span> on a keyboard).</li>
+        <li>On a keyboard, <span class="kbd">Esc</span> pauses and <span class="kbd">1</span>–<span class="kbd">3</span> also release the ultimate. The speed button fast-forwards.</li>
         <li>Burn, poison, bleed, stun, slow, shields and dodges all matter. Build around what drops.</li>
       </ul>
       <h3>Tips</h3>
