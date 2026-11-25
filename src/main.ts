@@ -126,6 +126,7 @@ function stopBattle(): void {
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   battle = null;
+  renderer?.destroy();
   renderer = null;
   paused = false;
   speed = 1;

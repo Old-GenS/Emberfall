@@ -60,6 +60,8 @@ body::after {
 
 #app { position: relative; z-index: 1; min-height: 100dvh; }
 button { font-family: inherit; font-size: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
+button:focus:not(:focus-visible) { outline: none; }
 a { color: var(--gold); }
 h1, h2, h3, h4 { font-family: var(--display); font-weight: 600; margin: 0; }
 

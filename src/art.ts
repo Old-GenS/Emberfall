@@ -337,12 +337,17 @@ export class SceneRenderer {
   speed = 1;
   private mobileView = false;
   private lastPositions = new Map<number, { x: number; y: number }>();
+  private onResize = () => this.resize();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', this.onResize);
+  }
+
+  destroy(): void {
+    window.removeEventListener('resize', this.onResize);
   }
 
   resize(): void {
