@@ -163,7 +163,7 @@ export const BOONS: BoonDef[] = [
   { id: 'ember-heart', name: 'Ember Heart', desc: '+25% ultimate charge rate.', icon: 'flame', rarity: 'rare', apply: s => { s.ultRate *= 1.25; } },
   { id: 'titan-blood', name: 'Titan Blood', desc: '+30% max HP, +8% attack.', icon: 'crown', rarity: 'epic', apply: s => { s.maxHp *= 1.3; s.atk *= 1.08; } },
   { id: 'assassins-creed', name: "Assassin's Creed", desc: '+12% crit chance, +20% crit damage.', icon: 'dagger', rarity: 'epic', apply: s => { s.crit += 0.12; s.critMult += 0.2; } },
-  { id: 'thornmail', name: 'Thornmail', desc: '+25 armor. Melee attackers are burned.', icon: 'shield', rarity: 'rare', classes: ['warden'], apply: s => { s.armor += 25; s.damageReduction += 0.04; } },
+  { id: 'thornmail', name: 'Thornmail', desc: '+25 armor and 4% damage reduction.', icon: 'shield', rarity: 'rare', classes: ['warden'], apply: s => { s.armor += 25; s.damageReduction += 0.04; } },
   { id: 'phoenix-spark', name: 'Phoenix Spark', desc: '+30% ability power, +10% attack.', icon: 'flame', rarity: 'epic', classes: ['pyromancer'], apply: s => { s.abilityPower *= 1.3; s.atk *= 1.1; } },
   { id: 'night-veil', name: 'Night Veil', desc: '+10% dodge, +10% attack speed.', icon: 'smoke', rarity: 'epic', classes: ['shadowblade'], apply: s => { s.dodge += 0.1; s.speed *= 0.9; } },
   { id: 'world-root', name: 'World Root', desc: '+2.5 regen, +12% max HP.', icon: 'leaf', rarity: 'epic', classes: ['spiritcaller'], apply: s => { s.regen += 2.5; s.maxHp *= 1.12; } },

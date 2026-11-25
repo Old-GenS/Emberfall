@@ -536,7 +536,7 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 600; margin: 0; }
   .realm-body { padding: 11px 12px; }
   .realm-head h2 { font-size: 17px; }
   .realm-blurb { display: none; }
-  .stage-node { width: 29px; height: 29px; font-size: 10px; }
+  .stage-node { width: 32px; height: 32px; font-size: 10px; }
   .stage-link { width: 10px; }
   .quest-info { display: none; }
   .boon-grid { grid-template-columns: 1fr; max-width: 400px; }
@@ -564,7 +564,7 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 600; margin: 0; }
 }
 @media (max-width: 400px) {
   .stage-link { width: 5px; }
-  .stage-node { width: 27px; height: 27px; }
+  .stage-node { width: 30px; height: 30px; }
   .game-logo { font-size: clamp(36px, 9.5vw, 50px); }
   .ult-info span { display: none; }
 }
