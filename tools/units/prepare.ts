@@ -22,6 +22,13 @@ interface Patch {
   y: number;
 }
 
+interface UnitOptions {
+  flip?: boolean;
+  hueKey?: boolean;
+}
+
+type KeyType = 'green' | 'magenta' | 'other';
+
 const PATCH_SIZE = 12;
 const PAD = 4;
 const MAX_SIDE = 1024;
@@ -29,6 +36,12 @@ const MAX_HEIGHT = 640;
 
 function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x;
+}
+
+function keyTypeOf(B: { r: number; g: number; b: number }): KeyType {
+  if (B.g > B.r + 40 && B.g > B.b + 40) return 'green';
+  if (Math.min(B.r, B.b) > B.g + 40) return 'magenta';
+  return 'other';
 }
 
 function patchesFor(width: number, height: number): Patch[] {
@@ -130,8 +143,10 @@ function keyResidualGreen(img: RawImage, B: { r: number; g: number; b: number })
   }
 }
 
-function keyBackground(img: RawImage): void {
+function keyBackground(img: RawImage, hueKey: boolean): KeyType {
   const B = cornerBackground(img);
+  const keyType = keyTypeOf(B);
+  const useHue = hueKey && keyType !== 'other';
   // A pure screen (0,255,0 everywhere) keys with a 36-wide core; a textured one (the Spiritcaller
   // was exported on mottled pink, rms noise 28 per channel) needs the core to cover its noise, or
   // about half the background survives as a semi-opaque haze. Scale both edges with the noise.
@@ -165,6 +180,15 @@ function keyBackground(img: RawImage): void {
       const bg = Math.min(margin / 0.25, (weakness - 0.35) / 0.25);
       a = clamp(1 - bg, 0, 1) * Math.max(a, bg > 0.5 ? 0 : 1);
     }
+    if (useHue) {
+      const ex = keyType === 'green' ? g - Math.max(r, b) : Math.min(r, b) - g;
+      const ref = keyType === 'green' ? g : Math.min(r, b);
+      if (ex > 24) {
+        const k = ex / Math.max(ref, 1);
+        const aHue = 1 - clamp((k - 0.45) / 0.35, 0, 1);
+        a = Math.min(a, aHue);
+      }
+    }
     const alpha = Math.min(data[i + 3]!, Math.round(a * 255));
     data[i + 3] = alpha;
     if (a > 0.05 && a < 1) {
@@ -173,6 +197,7 @@ function keyBackground(img: RawImage): void {
       data[i + 2] = clamp(Math.round((b - (1 - a) * B.b) / a), 0, 255);
     }
   }
+  return keyType;
 }
 
 /** Zero the alpha of 4-connected opaque components smaller than 2% of the largest. */
@@ -226,6 +251,63 @@ function removeSpecks(img: RawImage): void {
   }
 }
 
+/**
+ * Remove background tint from the thin opaque band that borders transparent pixels. Keying alone
+ * leaves a dark, half-blended rim carrying the screen's hue (a magenta outline around vines); this
+ * pulls that hue back to the body's own colour.
+ */
+function despillEdges(img: RawImage, keyType: KeyType, hueKey: boolean): void {
+  if (!hueKey || keyType === 'other') return;
+  const { data, width, height } = img;
+  const n = width * height;
+  const radius = Math.max(2, Math.round(0.004 * Math.max(width, height)));
+  const dist = new Int16Array(n).fill(-1);
+  const queue = new Int32Array(n);
+  let head = 0;
+  let tail = 0;
+
+  for (let p = 0; p < n; p++) {
+    if (data[p * 4 + 3]! <= 40) {
+      dist[p] = 0;
+      queue[tail++] = p;
+    }
+  }
+
+  while (head < tail) {
+    const p = queue[head++]!;
+    const d = dist[p]!;
+    if (d >= radius) continue;
+    const x = p % width;
+    const y = (p / width) | 0;
+    const visit = (q: number): void => {
+      if (dist[q] !== -1) return;
+      dist[q] = d + 1;
+      queue[tail++] = q;
+    };
+    if (x > 0) visit(p - 1);
+    if (x + 1 < width) visit(p + 1);
+    if (y > 0) visit(p - width);
+    if (y + 1 < height) visit(p + width);
+  }
+
+  for (let p = 0; p < n; p++) {
+    const i = p * 4;
+    if (data[i + 3]! <= 40) continue;
+    const d = dist[p]!;
+    if (d < 1 || d > radius) continue;
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+    if (keyType === 'green') {
+      data[i + 1] = Math.min(g, Math.max(r, b));
+    } else {
+      const e = Math.max(0, Math.min(r, b) - g);
+      data[i] = r - e;
+      data[i + 2] = b - e;
+    }
+  }
+}
+
 function opaqueFraction(img: RawImage): number {
   let count = 0;
   const n = img.width * img.height;
@@ -267,6 +349,50 @@ function trimToOpaque(img: RawImage): RawImage {
   return { data: out, width: cw, height: ch };
 }
 
+function flipHorizontal(img: RawImage): RawImage {
+  const { data, width, height } = img;
+  const out = Buffer.alloc(data.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const src = (y * width + x) * 4;
+      const dst = (y * width + (width - 1 - x)) * 4;
+      data.copy(out, dst, src, src + 4);
+    }
+  }
+  return { data: out, width, height };
+}
+
+/** % of opaque pixels that still carry more than 40 of the key hue. */
+function spillPercent(img: RawImage, keyType: KeyType): number | null {
+  if (keyType === 'other') return null;
+  const { data, width, height } = img;
+  let opaque = 0;
+  let spilled = 0;
+  for (let p = 0; p < width * height; p++) {
+    const i = p * 4;
+    if (data[i + 3]! <= 40) continue;
+    opaque++;
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+    const excess = keyType === 'green' ? g - Math.max(r, b) : Math.min(r, b) - g;
+    if (excess > 40) spilled++;
+  }
+  return opaque === 0 ? null : (spilled / opaque) * 100;
+}
+
+function zeroTransparentRgb(img: RawImage): void {
+  const { data } = img;
+  for (let p = 0; p < img.width * img.height; p++) {
+    const i = p * 4;
+    if (data[i + 3] !== 0) continue;
+    data[i] = 0;
+    data[i + 1] = 0;
+    data[i + 2] = 0;
+    data[i + 3] = 0;
+  }
+}
+
 function footXOf(img: RawImage): number {
   const { data, width, height } = img;
   const rows = Math.max(1, Math.ceil(height * 0.04));
@@ -285,13 +411,39 @@ function footXOf(img: RawImage): number {
 }
 
 async function resizeRaw(img: RawImage, height: number): Promise<RawImage> {
-  const { data, info } = await sharp(img.data, {
+  // Resize in premultiplied alpha. Resampling RGBA directly lets the colour stashed in fully
+  // transparent pixels (usually the screen) bleed back into the opaque edge, which re-creates the
+  // halo despill just removed.
+  const n = img.width * img.height;
+  const pre = Buffer.alloc(img.data.length);
+  for (let p = 0; p < n; p++) {
+    const i = p * 4;
+    const a = img.data[i + 3]!;
+    pre[i] = Math.round((img.data[i]! * a) / 255);
+    pre[i + 1] = Math.round((img.data[i + 1]! * a) / 255);
+    pre[i + 2] = Math.round((img.data[i + 2]! * a) / 255);
+    pre[i + 3] = a;
+  }
+  const { data, info } = await sharp(pre, {
     raw: { width: img.width, height: img.height, channels: 4 },
   })
     .resize({ height, kernel: 'lanczos3' })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
+  for (let p = 0; p < info.width * info.height; p++) {
+    const i = p * 4;
+    const a = data[i + 3]!;
+    if (a === 0) {
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+    } else {
+      data[i] = clamp(Math.round((data[i]! * 255) / a), 0, 255);
+      data[i + 1] = clamp(Math.round((data[i + 1]! * 255) / a), 0, 255);
+      data[i + 2] = clamp(Math.round((data[i + 2]! * 255) / a), 0, 255);
+    }
+  }
   return { data, width: info.width, height: info.height };
 }
 
@@ -299,13 +451,22 @@ interface Prepared {
   name: string;
   keyed: boolean;
   opaquePct: number;
+  spill: number | null;
+  flip: boolean;
   w: number;
   h: number;
   footX: number;
   outputPath: string;
 }
 
-async function prepareFile(inputPath: string, name: string, outDir: string): Promise<Prepared> {
+async function prepareFile(
+  inputPath: string,
+  name: string,
+  outDir: string,
+  options: UnitOptions,
+): Promise<Prepared> {
+  const hueKey = options.hueKey !== false;
+  const flip = options.flip === true;
   let pipeline = sharp(inputPath, { failOn: 'none' });
   const metadata = await pipeline.metadata();
   const longest = Math.max(metadata.width ?? 0, metadata.height ?? 0);
@@ -321,9 +482,10 @@ async function prepareFile(inputPath: string, name: string, outDir: string): Pro
   const loaded = await pipeline.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const img: RawImage = { data: loaded.data, width: loaded.info.width, height: loaded.info.height };
 
+  let keyType: KeyType = 'other';
   const keyed = allCornerMeanAlpha(img) >= 16;
   if (keyed) {
-    keyBackground(img);
+    keyType = keyBackground(img, hueKey);
     keyResidualGreen(img, cornerBackground(img));
   }
 
@@ -336,6 +498,7 @@ async function prepareFile(inputPath: string, name: string, outDir: string): Pro
   }
 
   removeSpecks(img);
+  despillEdges(img, keyType, hueKey);
   const opaque = opaqueFraction(img);
   if (opaque < 0.03 || opaque > 0.90) {
     throw new Error(`opaque fraction ${(opaque * 100).toFixed(2)}% outside [3%, 90%]`);
@@ -343,8 +506,11 @@ async function prepareFile(inputPath: string, name: string, outDir: string): Pro
 
   let final = trimToOpaque(img);
   if (final.height > MAX_HEIGHT) final = await resizeRaw(final, MAX_HEIGHT);
+  if (flip) final = flipHorizontal(final);
+  zeroTransparentRgb(final);
 
   const footX = footXOf(final);
+  const spill = spillPercent(final, keyType);
   const outputPath = path.join(outDir, `${name}.webp`);
   await sharp(final.data, {
     raw: { width: final.width, height: final.height, channels: 4 },
@@ -356,6 +522,8 @@ async function prepareFile(inputPath: string, name: string, outDir: string): Pro
     name,
     keyed,
     opaquePct: opaque * 100,
+    spill,
+    flip,
     w: final.width,
     h: final.height,
     footX,
@@ -366,26 +534,80 @@ async function prepareFile(inputPath: string, name: string, outDir: string): Pro
 interface Options {
   inDir: string;
   outDir: string;
+  optionsPath: string;
 }
 
 function parseArgs(argv: string[]): Options {
-  const opts: Options = { inDir: 'art/units', outDir: 'public/assets/units' };
+  const opts: Options = {
+    inDir: 'art/units',
+    outDir: 'public/assets/units',
+    optionsPath: 'tools/units/options.json',
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--') continue;
-    if (arg === '--in' || arg === '--out') {
+    if (arg === '--in' || arg === '--out' || arg === '--options') {
       const value = argv[i + 1];
       if (value === undefined || value === '--') {
         throw new Error(`missing value for ${arg}`);
       }
       i++;
       if (arg === '--in') opts.inDir = value;
-      else opts.outDir = value;
+      else if (arg === '--out') opts.outDir = value;
+      else opts.optionsPath = value;
       continue;
     }
     console.warn(`warn: ignoring unknown argument ${arg}`);
   }
   return opts;
+}
+
+/** Read per-unit options; a missing file means every unit uses the defaults. */
+async function loadOptions(
+  optionsPath: string,
+  ids: Set<string>,
+): Promise<Map<string, UnitOptions>> {
+  const options = new Map<string, UnitOptions>();
+  let text: string;
+  try {
+    text = await fs.readFile(optionsPath, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return options;
+    throw err;
+  }
+  const parsed: unknown = JSON.parse(text);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`options file ${optionsPath} must contain a JSON object`);
+  }
+  for (const [id, raw] of Object.entries(parsed)) {
+    if (!ids.has(id)) {
+      console.warn(`warn: options: ignoring unknown unit id ${id}`);
+      continue;
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      console.warn(`warn: options: ignoring ${id} (value must be an object)`);
+      continue;
+    }
+    const unit: UnitOptions = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (key !== 'flip' && key !== 'hueKey') {
+        console.warn(`warn: options: ignoring unknown key ${id}.${key}`);
+        continue;
+      }
+      if (typeof value !== 'boolean') {
+        console.warn(`warn: options: ignoring ${id}.${key} (must be a boolean)`);
+        continue;
+      }
+      if (key === 'flip') unit.flip = value;
+      else unit.hueKey = value;
+    }
+    options.set(id, unit);
+  }
+  return options;
+}
+
+function unitIdOf(name: string): string {
+  return name.endsWith('-attack') ? name.slice(0, -'-attack'.length) : name;
 }
 
 function inputName(file: string, ids: Set<string>): string | null {
@@ -431,6 +653,14 @@ async function main(): Promise<void> {
   }
 
   const ids = new Set(UNIT_ART_IDS);
+  let unitOptions: Map<string, UnitOptions>;
+  try {
+    unitOptions = await loadOptions(opts.optionsPath, ids);
+  } catch (err) {
+    console.error(`error: cannot load options ${opts.optionsPath}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
   await fs.mkdir(opts.outDir, { recursive: true });
 
   let entries: string[] = [];
@@ -455,7 +685,12 @@ async function main(): Promise<void> {
       continue;
     }
     try {
-      const result = await prepareFile(path.join(opts.inDir, file), name, opts.outDir);
+      const result = await prepareFile(
+        path.join(opts.inDir, file),
+        name,
+        opts.outDir,
+        unitOptions.get(unitIdOf(name)) ?? {},
+      );
       written[name] = {
         file: `${name}.webp`,
         w: result.w,
@@ -465,12 +700,17 @@ async function main(): Promise<void> {
       console.log(
         `${name.padEnd(24)} ${`${result.w}x${result.h}`.padEnd(11)} ` +
         `${(result.keyed ? 'keyed' : 'alpha').padEnd(6)} ` +
-        `${`${result.opaquePct.toFixed(1)}%`.padEnd(8)} ok`,
+        `${`${result.opaquePct.toFixed(1)}%`.padEnd(8)} ` +
+        `${(result.spill === null ? '-' : `${result.spill.toFixed(1)}%`).padEnd(8)} ` +
+        `${(result.flip ? 'flip' : '').padEnd(4)} ok`,
       );
     } catch (err) {
       failed = true;
       const message = err instanceof Error ? err.message : String(err);
-      console.log(`${name.padEnd(24)} ${'-'.padEnd(11)} ${'-'.padEnd(6)} ${'-'.padEnd(8)} error: ${message}`);
+      console.log(
+        `${name.padEnd(24)} ${'-'.padEnd(11)} ${'-'.padEnd(6)} ${'-'.padEnd(8)} ` +
+        `${'-'.padEnd(8)} ${'-'.padEnd(4)} error: ${message}`,
+      );
     }
   }
 

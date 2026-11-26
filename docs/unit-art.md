@@ -11,6 +11,12 @@ The battle shows each hero and enemy as a painted image when one exists, and fal
 
 Optional: `<id>-attack.png` with the same framing, mid-attack. The game cross-fades to it during attacks. Without one, attacks are a lean and lunge of the idle image.
 
+## Per-unit options
+
+`tools/units/options.json` maps a unit id to options. Set `flip: true` for art that faces left; set
+`hueKey: false` for a unit whose own colours match its background colour. Options also apply to the
+unit's `-attack` image.
+
 ## Rules for every image (give these to the image model each time)
 
 - **Canvas:** square, 1024×1024 or larger, PNG.

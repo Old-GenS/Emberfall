@@ -3,55 +3,55 @@
   "units": {
     "ash-hound": {
       "file": "ash-hound.webp",
-      "w": 635,
+      "w": 617,
       "h": 640,
-      "footX": 405
+      "footX": 394
     },
     "ash-seraph": {
       "file": "ash-seraph.webp",
       "w": 589,
       "h": 640,
-      "footX": 292
+      "footX": 291
     },
     "ashen-king": {
       "file": "ashen-king.webp",
       "w": 363,
       "h": 640,
-      "footX": 150
+      "footX": 147
     },
     "bramble-stalker": {
       "file": "bramble-stalker.webp",
       "w": 580,
       "h": 640,
-      "footX": 127
+      "footX": 125
     },
     "cinder-imp": {
       "file": "cinder-imp.webp",
-      "w": 557,
+      "w": 556,
       "h": 640,
-      "footX": 280
+      "footX": 279
     },
     "coral-sentinel": {
       "file": "coral-sentinel.webp",
       "w": 445,
       "h": 640,
-      "footX": 239
+      "footX": 238
     },
     "drowned-acolyte": {
       "file": "drowned-acolyte.webp",
-      "w": 532,
+      "w": 533,
       "h": 640,
       "footX": 172
     },
     "dusk-wyrm": {
       "file": "dusk-wyrm.webp",
-      "w": 646,
+      "w": 645,
       "h": 640,
       "footX": 301
     },
     "frost-wraith": {
       "file": "frost-wraith.webp",
-      "w": 531,
+      "w": 529,
       "h": 640,
       "footX": 289
     },
@@ -59,7 +59,7 @@
       "file": "hollow-treant.webp",
       "w": 619,
       "h": 640,
-      "footX": 288
+      "footX": 289
     },
     "ice-golem": {
       "file": "ice-golem.webp",
@@ -69,27 +69,27 @@
     },
     "leviathan-eye": {
       "file": "leviathan-eye.webp",
-      "w": 587,
+      "w": 589,
       "h": 640,
-      "footX": 305
+      "footX": 303
     },
     "magma-brute": {
       "file": "magma-brute.webp",
-      "w": 654,
+      "w": 653,
       "h": 640,
-      "footX": 276
+      "footX": 274
     },
     "molten-warden": {
       "file": "molten-warden.webp",
-      "w": 456,
+      "w": 457,
       "h": 640,
-      "footX": 101
+      "footX": 103
     },
     "pale-stag": {
       "file": "pale-stag.webp",
       "w": 602,
       "h": 640,
-      "footX": 254
+      "footX": 348
     },
     "pyromancer": {
       "file": "pyromancer.webp",
@@ -99,15 +99,15 @@
     },
     "rime-wolf": {
       "file": "rime-wolf.webp",
-      "w": 686,
+      "w": 687,
       "h": 640,
-      "footX": 475
+      "footX": 477
     },
     "shadowblade": {
       "file": "shadowblade.webp",
       "w": 658,
       "h": 640,
-      "footX": 422
+      "footX": 235
     },
     "spiritcaller": {
       "file": "spiritcaller.webp",
@@ -117,15 +117,15 @@
     },
     "spore-wisp": {
       "file": "spore-wisp.webp",
-      "w": 538,
+      "w": 551,
       "h": 640,
-      "footX": 182
+      "footX": 184
     },
     "tide-revenant": {
       "file": "tide-revenant.webp",
-      "w": 470,
+      "w": 448,
       "h": 640,
-      "footX": 258
+      "footX": 236
     },
     "void-knight": {
       "file": "void-knight.webp",
@@ -135,9 +135,9 @@
     },
     "warden": {
       "file": "warden.webp",
-      "w": 460,
+      "w": 459,
       "h": 640,
-      "footX": 263
+      "footX": 261
     },
     "winters-herald": {
       "file": "winters-herald.webp",
