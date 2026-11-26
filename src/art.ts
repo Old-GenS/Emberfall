@@ -1,6 +1,6 @@
 import type { Battle, CombatEvent, Unit } from './combat';
 import { type ClassDef, type LocationDef } from './data';
-import { drawCreatureGothic, drawGothicHalo, drawHeroGothic } from './sprites';
+import { drawFinishedUnit, drawGothicHalo, type UnitLight } from './sprites/index';
 
 export const DESIGN_W = 960;
 export const DESIGN_H = 540;
@@ -951,20 +951,20 @@ export class SceneRenderer {
       drawGothicHalo(ctx, 0, -68, 52, '#8dffc2', '#3ddc97', this.time * 1.5, 0.32);
     }
 
+    const light: UnitLight = { accent: this.location?.palette.accent ?? '#e9c46a', ground: this.location?.palette.ground ?? '#120b10' };
+
     // Darkest-Dungeon lunge shadow smear when attacking!
     if (u.anim.attack > 0.25) {
       ctx.save();
       ctx.translate(-18 * u.anim.attack, 0);
       ctx.globalAlpha *= 0.28 * u.anim.attack;
       ctx.filter = 'brightness(0.2)';
-      if (u.side === 'hero' && u.classId) drawHeroGothic(ctx, u.classId, u, this.time);
-      else drawCreatureGothic(ctx, u.body, u.colors as any, u, this.time, u.side === 'ally');
+      drawFinishedUnit(ctx, u, this.time, light);
       ctx.restore();
     }
 
     ctx.filter = u.anim.hit > 0.05 ? `brightness(${1 + u.anim.hit * 1.25})` : 'none';
-    if (u.side === 'hero' && u.classId) drawHeroGothic(ctx, u.classId, u, this.time);
-    else drawCreatureGothic(ctx, u.body, u.colors as any, u, this.time, u.side === 'ally');
+    drawFinishedUnit(ctx, u, this.time, light);
     ctx.filter = 'none';
 
     if (burning) {

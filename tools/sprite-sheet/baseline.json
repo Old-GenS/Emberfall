@@ -1,0 +1,102 @@
+{
+  "The Warden": {
+    "h": 253,
+    "w": 110
+  },
+  "The Pyromancer": {
+    "h": 202,
+    "w": 119
+  },
+  "The Shadowblade": {
+    "h": 183,
+    "w": 116
+  },
+  "The Spiritcaller": {
+    "h": 226,
+    "w": 126
+  },
+  "Cinder Imp": {
+    "h": 127,
+    "w": 105
+  },
+  "Ash Hound": {
+    "h": 105,
+    "w": 140
+  },
+  "Magma Brute": {
+    "h": 195,
+    "w": 130
+  },
+  "The Molten Warden": {
+    "h": 293,
+    "w": 198
+  },
+  "Bramble Stalker": {
+    "h": 151,
+    "w": 81
+  },
+  "Spore Wisp": {
+    "h": 100,
+    "w": 80
+  },
+  "Hollow Treant": {
+    "h": 201,
+    "w": 135
+  },
+  "The Pale Stag": {
+    "h": 299,
+    "w": 223
+  },
+  "Rime Wolf": {
+    "h": 105,
+    "w": 140
+  },
+  "Frost Wraith": {
+    "h": 144,
+    "w": 86
+  },
+  "Ice Golem": {
+    "h": 209,
+    "w": 138
+  },
+  "The Winter's Herald": {
+    "h": 235,
+    "w": 212
+  },
+  "Drowned Acolyte": {
+    "h": 142,
+    "w": 62
+  },
+  "Tide Revenant": {
+    "h": 204,
+    "w": 85
+  },
+  "Coral Sentinel": {
+    "h": 142,
+    "w": 110
+  },
+  "The Leviathan Eye": {
+    "h": 258,
+    "w": 234
+  },
+  "Void Knight": {
+    "h": 207,
+    "w": 88
+  },
+  "Ash Seraph": {
+    "h": 169,
+    "w": 154
+  },
+  "Dusk Wyrm": {
+    "h": 197,
+    "w": 198
+  },
+  "The Ashen King": {
+    "h": 360,
+    "w": 218
+  },
+  "Spirit Wolf": {
+    "h": 92,
+    "w": 122
+  }
+}
