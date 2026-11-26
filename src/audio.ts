@@ -77,6 +77,10 @@ class AudioEngine {
   private sfxBus!: GainNode;
   private reverb!: ConvolverNode;
   private reverbGain!: GainNode;
+  // Each bus reaches the shared reverb through its own gated send, so muting music or sound
+  // effects also mutes their reverb tail (it used to bypass the buses and keep droning).
+  private musicVerb!: GainNode;
+  private sfxVerb!: GainNode;
   private noiseBuf!: AudioBuffer;
   private musicOn = true;
   private sfxOn = true;
@@ -120,6 +124,12 @@ class AudioEngine {
     this.reverbGain = ctx.createGain();
     this.reverbGain.gain.value = 0.5;
     this.reverbGain.connect(this.reverb).connect(this.master);
+    this.musicVerb = ctx.createGain();
+    this.musicVerb.gain.value = this.musicOn ? 1 : 0;
+    this.musicVerb.connect(this.reverbGain);
+    this.sfxVerb = ctx.createGain();
+    this.sfxVerb.gain.value = this.sfxOn ? 1 : 0;
+    this.sfxVerb.connect(this.reverbGain);
     this.noiseBuf = this.makeNoise(1.5);
     if (ctx.state === 'suspended') await ctx.resume();
     this.started = true;
@@ -150,11 +160,15 @@ class AudioEngine {
 
   setMusicEnabled(on: boolean) {
     this.musicOn = on;
-    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? 0.22 : 0, this.ctx.currentTime, 0.1);
+    if (!this.ctx) return;
+    this.musicBus.gain.setTargetAtTime(on ? 0.22 : 0, this.ctx.currentTime, 0.1);
+    this.musicVerb.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.1);
   }
   setSfxEnabled(on: boolean) {
     this.sfxOn = on;
-    if (this.ctx) this.sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, this.ctx.currentTime, 0.05);
+    if (!this.ctx) return;
+    this.sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, this.ctx.currentTime, 0.05);
+    this.sfxVerb.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.05);
   }
 
   playMusic(theme: ThemeId, intensity = false): void {
@@ -270,7 +284,7 @@ class AudioEngine {
     g.connect(this.musicBus);
     const send = ctx.createGain();
     send.gain.value = 0.55;
-    g.connect(send).connect(this.reverbGain);
+    g.connect(send).connect(this.musicVerb);
     for (const det of [-6, 5]) {
       const o = ctx.createOscillator();
       o.type = wave;
@@ -314,7 +328,7 @@ class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
     o.connect(filter).connect(g).connect(this.musicBus);
     const send = ctx.createGain(); send.gain.value = 0.35;
-    g.connect(send).connect(this.reverbGain);
+    g.connect(send).connect(this.musicVerb);
     o.start(time); o.stop(time + dur + 0.05);
   }
 
@@ -335,7 +349,7 @@ class AudioEngine {
     o.connect(g);
     g.connect(this.musicBus);
     const send = ctx.createGain(); send.gain.value = 0.5;
-    g.connect(send).connect(this.reverbGain);
+    g.connect(send).connect(this.musicVerb);
     o.start(time); o.stop(time + dur + 0.05);
     lfo.start(time); lfo.stop(time + dur + 0.05);
   }
@@ -400,7 +414,7 @@ class AudioEngine {
     o.connect(g);
     g.connect(this.sfxBus);
     const send = ctx.createGain(); send.gain.value = 0.25;
-    g.connect(send).connect(this.reverbGain);
+    g.connect(send).connect(this.sfxVerb);
     o.start(t); o.stop(t + dur + 0.05);
   }
 
