@@ -1,7 +1,13 @@
 import { CLASSES, LOCATIONS } from '../../src/data';
 import type { BodyKind, ClassId } from '../../src/data';
 import type { Unit } from '../../src/combat';
-import { drawFinishedUnit, type UnitLight } from '../../src/sprites/index';
+import {
+  drawFinishedUnit,
+  hasPaintedArt,
+  registerUnitArt,
+  type UnitArtMeta,
+  type UnitLight,
+} from '../../src/sprites/index';
 
 export interface SheetUnit {
   uid: number;
@@ -127,11 +133,24 @@ function render(canvas: HTMLCanvasElement, index: number, pose: Pose): void {
   ctx.restore();
 }
 
+async function addArt(id: string, dataUrl: string, meta: UnitArtMeta): Promise<void> {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  registerUnitArt(id, img, meta);
+}
+
+function isPainted(index: number): boolean {
+  return hasPaintedArt(units[index] as unknown as Unit);
+}
+
 declare global {
   interface Window {
     spriteSheet: {
       names(): string[];
       render(canvas: HTMLCanvasElement, index: number, pose: Pose): void;
+      addArt(id: string, dataUrl: string, meta: UnitArtMeta): Promise<void>;
+      isPainted(index: number): boolean;
     };
   }
 }
@@ -139,4 +158,6 @@ declare global {
 window.spriteSheet = {
   names: () => units.map((u) => u.name),
   render,
+  addArt,
+  isPainted,
 };

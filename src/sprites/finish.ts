@@ -1,6 +1,7 @@
 import type { Unit } from '../combat';
 import { drawHeroGothic } from './heroes';
 import { drawCreatureGothic } from './creatures';
+import { drawPainted, hasPaintedArt, loadUnitArtManifest } from './painted';
 
 export interface UnitLight { accent: string; ground: string }
 
@@ -15,6 +16,7 @@ interface UidCache {
 }
 
 const cache = new Map<number, UidCache>();
+let manifestRequested = false;
 
 /* A single 128x128 grain tile, built once from a seeded LCG. The values stay
  * close to neutral grey so the overlay only breaks up the flat fills. */
@@ -93,6 +95,7 @@ function makeCanvas(w: number, h: number): HTMLCanvasElement {
 }
 
 function renderRaw(ctx: CanvasRenderingContext2D, u: Unit, time: number): void {
+  if (drawPainted(ctx, u, time)) return;
   if (u.side === 'hero' && u.classId) drawHeroGothic(ctx, u.classId, u, time);
   else drawCreatureGothic(ctx, u.body, u.colors as any, u, time, u.side === 'ally');
 }
@@ -119,6 +122,7 @@ function paintFinish(
   k: number,
   w: number,
   h: number,
+  painted: boolean,
 ): void {
   /* Raw sprite on the offscreen, plus a pristine alpha copy used by every
    * masking step below. */
@@ -153,16 +157,19 @@ function paintFinish(
   off.globalAlpha = 1;
   off.drawImage(mask.canvas, 0, 0);
 
-  /* (c) texture: one 128x128 grain tile at low overlay alpha. */
-  const pat = grainPattern(off);
-  if (pat) {
-    off.globalCompositeOperation = 'overlay';
-    off.globalAlpha = 0.16;
-    off.fillStyle = pat;
-    off.fillRect(0, 0, w, h);
-    off.globalCompositeOperation = 'destination-in';
-    off.globalAlpha = 1;
-    off.drawImage(mask.canvas, 0, 0);
+  /* (c) texture: one 128x128 grain tile at low overlay alpha. Painted art
+   * already carries its own paint texture, so it skips this step. */
+  if (!painted) {
+    const pat = grainPattern(off);
+    if (pat) {
+      off.globalCompositeOperation = 'overlay';
+      off.globalAlpha = 0.16;
+      off.fillStyle = pat;
+      off.fillRect(0, 0, w, h);
+      off.globalCompositeOperation = 'destination-in';
+      off.globalAlpha = 1;
+      off.drawImage(mask.canvas, 0, 0);
+    }
   }
 
   /* (d) rim light: the mask minus itself shifted down-right. */
@@ -188,10 +195,16 @@ function paintFinish(
 }
 
 export function drawFinishedUnit(ctx: CanvasRenderingContext2D, u: Unit, time: number, light: UnitLight): void {
+  if (!manifestRequested && typeof document !== 'undefined' && window.location.protocol !== 'about:') {
+    manifestRequested = true;
+    loadUnitArtManifest();
+  }
+
   const m = ctx.getTransform();
   const k = Math.min(2.5, Math.hypot(m.a, m.b)) || 1;
   const a = u.anim;
-  const key = [u.uid, time, u.alive ? 1 : 0, a.attack, a.hit, a.heal, a.spawn, a.cast].join('|');
+  const painted = hasPaintedArt(u);
+  const key = [u.uid, time, u.alive ? 1 : 0, a.attack, a.hit, a.heal, a.spawn, a.cast, painted ? 1 : 0].join('|');
 
   const w = Math.max(1, Math.ceil(360 * k));
   const h = Math.max(1, Math.ceil(380 * k));
@@ -213,7 +226,7 @@ export function drawFinishedUnit(ctx: CanvasRenderingContext2D, u: Unit, time: n
     const mask = entry.mask.getContext('2d');
     const rim = entry.rim.getContext('2d');
     if (off && mask && rim) {
-      paintFinish(off, mask, rim, u, time, light, k, w, h);
+      paintFinish(off, mask, rim, u, time, light, k, w, h, painted);
       entry.key = key;
       entry.k = k;
     }

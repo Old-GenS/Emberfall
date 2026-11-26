@@ -37,6 +37,7 @@ function findChromium() {
 function measure(name, buffers) {
   const pixels = buffers.idleA;
   let opaque = 0;
+  let keyed = 0;
   let minX = W;
   let maxX = -1;
   let minY = H;
@@ -48,6 +49,10 @@ function measure(name, buffers) {
       const i = (y * W + x) * 4;
       if (pixels[i + 3] <= 40) continue;
       opaque++;
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      if ((g > 200 && r < 70 && b < 70) || (r > 200 && b > 200 && g < 70)) keyed++;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
@@ -85,13 +90,14 @@ function measure(name, buffers) {
     h,
     w,
     edge,
+    fringe: opaque > 0 ? keyed / opaque : 0,
     idle: delta(pixels, buffers.idleB),
     attack: delta(pixels, buffers.attack),
     cast: delta(pixels, buffers.cast),
   };
 }
 
-function printTable(rows, baseline) {
+function printTable(rows, baseline, painted = false) {
   console.log(
     'unit'.padEnd(22) +
       'h/h0'.padStart(7) +
@@ -101,6 +107,7 @@ function printTable(rows, baseline) {
       'idle'.padStart(8) +
       'attack'.padStart(8) +
       'cast'.padStart(8) +
+      (painted ? 'painted'.padStart(9) + 'fringe'.padStart(8) : '') +
       '  result',
   );
   for (const r of rows) {
@@ -117,13 +124,16 @@ function printTable(rows, baseline) {
         r.idle.toFixed(3).padStart(8) +
         r.attack.toFixed(3).padStart(8) +
         r.cast.toFixed(3).padStart(8) +
+        (painted
+          ? String(r.painted).padStart(9) + (r.fringe * 100).toFixed(3).padStart(8)
+          : '') +
         '  ' +
         result,
     );
   }
 }
 
-function check(rows, baseline) {
+function check(rows, baseline, painted = false) {
   let passed = 0;
   for (const r of rows) {
     const failed = [];
@@ -131,11 +141,15 @@ function check(rows, baseline) {
     if (!b) failed.push('no-baseline');
     if (r.opaque < 1200) failed.push('opaque');
     if (r.edge) failed.push('edge');
-    if (b && !(r.h / b.h >= 0.85 && r.h / b.h <= 1.3)) failed.push('height');
-    if (b && r.w / b.w > 1.5) failed.push('width');
+    if (b && !(r.h / b.h >= (painted ? 0.8 : 0.85) && r.h / b.h <= 1.3)) failed.push('height');
+    if (!painted && b && r.w / b.w > 1.5) failed.push('width');
     if (r.idle < 0.02) failed.push('idle');
     if (r.attack < 0.06) failed.push('attack');
     if (r.cast < 0.03) failed.push('cast');
+    if (painted) {
+      if (!r.painted) failed.push('painted');
+      if (r.fringe > 0.002) failed.push('fringe');
+    }
     r.failed = failed;
     if (!failed.length) passed++;
   }
@@ -143,18 +157,38 @@ function check(rows, baseline) {
 }
 
 async function main() {
-  const baselineMode = process.argv[2] === 'baseline';
+  const args = process.argv.slice(2).filter((arg) => arg !== '--');
+  const baselineMode = args.includes('baseline');
+  const paintedMode = args.includes('--painted');
   fs.mkdirSync(OUT, { recursive: true });
 
   const executablePath = findChromium();
   if (!executablePath) throw new Error('No Chromium binary found (set CHROMIUM_PATH)');
   if (!exists(BUNDLE)) throw new Error(`Missing bundle: ${BUNDLE} (run npm run sprites)`);
 
+  const arts = [];
+  if (paintedMode) {
+    const unitsDir = path.resolve(ROOT, process.env.UNITS_DIR ?? 'public/assets/units');
+    const manifest = JSON.parse(fs.readFileSync(path.join(unitsDir, 'manifest.json'), 'utf8'));
+    for (const [id, meta] of Object.entries(manifest.units)) {
+      const webp = fs.readFileSync(path.join(unitsDir, meta.file));
+      arts.push({ id, meta, dataUrl: `data:image/webp;base64,${webp.toString('base64')}` });
+    }
+  }
+
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'], executablePath });
   const page = await browser.newPage({ viewport: { width: COLS * CELL_W, height: 1500 } });
   page.setDefaultTimeout(180000);
   await page.setContent('<!doctype html><body style="margin:0;background:#1a1220"></body>');
   await page.addScriptTag({ path: BUNDLE });
+
+  if (paintedMode) {
+    await page.evaluate(async (entries) => {
+      for (const entry of entries) {
+        await window.spriteSheet.addArt(entry.id, entry.dataUrl, entry.meta);
+      }
+    }, arts);
+  }
 
   const names = await page.evaluate(() => window.spriteSheet.names());
 
@@ -216,7 +250,9 @@ async function main() {
 
     const buffers = {};
     for (const pose of POSES) buffers[pose] = Buffer.from(encoded[pose], 'base64');
-    rows.push(measure(name, buffers));
+    const row = measure(name, buffers);
+    if (paintedMode) row.painted = await page.evaluate((index) => window.spriteSheet.isPainted(index), i);
+    rows.push(row);
   }
 
   const urls = await page.evaluate(() => ({
@@ -224,14 +260,17 @@ async function main() {
     attack: window.__sheets.attack.toDataURL('image/png'),
     cast: window.__sheets.cast.toDataURL('image/png'),
   }));
-  fs.writeFileSync(path.join(OUT, 'sheet-idle.png'), Buffer.from(urls.idle.split(',')[1], 'base64'));
-  fs.writeFileSync(path.join(OUT, 'sheet-attack.png'), Buffer.from(urls.attack.split(',')[1], 'base64'));
-  fs.writeFileSync(path.join(OUT, 'sheet-cast.png'), Buffer.from(urls.cast.split(',')[1], 'base64'));
-  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(rows, null, 2) + '\n');
+  const prefix = paintedMode ? 'painted-' : 'sheet-';
+  fs.writeFileSync(path.join(OUT, `${prefix}idle.png`), Buffer.from(urls.idle.split(',')[1], 'base64'));
+  fs.writeFileSync(path.join(OUT, `${prefix}attack.png`), Buffer.from(urls.attack.split(',')[1], 'base64'));
+  fs.writeFileSync(path.join(OUT, `${prefix}cast.png`), Buffer.from(urls.cast.split(',')[1], 'base64'));
+  if (!paintedMode) {
+    fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(rows, null, 2) + '\n');
+  }
 
   await browser.close();
 
-  if (baselineMode) {
+  if (baselineMode && !paintedMode) {
     const baseline = {};
     for (const r of rows) baseline[r.name] = { h: r.h, w: r.w };
     fs.writeFileSync(BASELINE, JSON.stringify(baseline, null, 2) + '\n');
@@ -241,9 +280,16 @@ async function main() {
   }
 
   const baseline = exists(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, 'utf8')) : {};
-  const passed = check(rows, baseline);
-  printTable(rows, baseline);
-  console.log(`sprites: ${passed}/${rows.length} pass`);
+  const passed = check(rows, baseline, paintedMode);
+  if (paintedMode) {
+    fs.writeFileSync(path.join(OUT, 'painted-report.json'), JSON.stringify(rows, null, 2) + '\n');
+  }
+  printTable(rows, baseline, paintedMode);
+  console.log(
+    paintedMode
+      ? `sprites (painted): ${passed}/${rows.length} pass`
+      : `sprites: ${passed}/${rows.length} pass`,
+  );
   if (passed !== rows.length) process.exitCode = 1;
 }
 
