@@ -89,8 +89,8 @@ const statBar = (label: string, val: number, max: number, display: string): stri
 function classCard(cls: ClassDef): string {
   const s = cls.stats;
   const skills = [
-    ...cls.abilities.map(a => `<div class="skill-chip">${icon(a.icon)}<div class="skill-tip"><b>${a.name}</b>${a.desc}</div></div>`),
-    `<div class="skill-chip ult">${icon(cls.ultimate.icon)}<div class="skill-tip"><b>Ultimate · ${cls.ultimate.name}</b>${cls.ultimate.desc}</div></div>`,
+    ...cls.abilities.map((a, i) => `<div class="skill-chip" data-tip="skill:${cls.id}:${i}" tabindex="0" aria-label="${a.name}">${icon(a.icon)}<div class="skill-tip"><b>${a.name}</b>${a.desc}</div></div>`),
+    `<div class="skill-chip ult" data-tip="skill:${cls.id}:ult" tabindex="0" aria-label="${cls.ultimate.name}">${icon(cls.ultimate.icon)}<div class="skill-tip"><b>Ultimate · ${cls.ultimate.name}</b>${cls.ultimate.desc}</div></div>`,
   ].join('');
   return `<article class="class-card" data-class="${cls.id}" style="--cls-accent:${cls.colors.main};--cls-glow:${cls.colors.glow}">
     <div class="portrait">${classPortraitSVG(cls)}</div>
@@ -104,7 +104,7 @@ function classCard(cls: ClassDef): string {
         ${statBar('DEF', s.armor, 22, `${s.armor}`)}
         ${statBar('SPD', 2 - s.speed, 0.7, `${(1 / s.speed).toFixed(1)}/s`)}
       </div>
-      <div class="passive-line">${icon(cls.passive.icon)}<span><b>${cls.passive.name}</b> — ${cls.passive.desc}</span></div>
+      <div class="passive-line" data-tip="skill:${cls.id}:passive" tabindex="0" aria-label="${cls.passive.name}">${icon(cls.passive.icon)}<span><b>${cls.passive.name}</b> — ${cls.passive.desc}</span></div>
       <div class="skill-row">${skills}</div>
       <button class="btn primary" data-choose="${cls.id}">Swear Oath · ${cls.name.replace('The ', '')}</button>
     </div>
@@ -188,7 +188,7 @@ function boonPills(ids: string[]): string {
   const pills = Object.entries(counts).map(([id, n]) => {
     const b = BOONS.find(x => x.id === id);
     if (!b) return '';
-    return `<span class="boon-pill" title="${b.name}: ${b.desc}">${icon(b.icon)}${b.name}${n > 1 ? ` ×${n}` : ''}<span class="pd">${b.desc}</span></span>`;
+    return `<span class="boon-pill" data-tip="boon:${id}" tabindex="0">${icon(b.icon)}${b.name}${n > 1 ? ` ×${n}` : ''}<span class="pd">${b.desc}</span></span>`;
   }).join('');
   return `<details class="boon-details"${touchDevice() ? '' : ' open'}><summary>Arcana Boons · ${ids.length}</summary><div class="boon-list">${pills}</div></details>`;
 }
@@ -287,7 +287,7 @@ export function renderBattle(info: BattleUIInfo): string {
   const { location, stageInLoc } = stageInfo(stage);
   const boss = stageInLoc === 4;
   const abilityEls = cls.abilities.map((a, i) => `
-    <div class="ability" id="ab-${i}" title="${a.name} — ${a.desc}">
+    <div class="ability" id="ab-${i}" data-tip="skill:${cls.id}:${i}" tabindex="0" aria-label="${a.name}">
       ${icon(a.icon)}
       <div class="cd-mask" id="cd-${i}" style="transform:scaleY(0)"></div>
       <div class="cd-text" id="cdt-${i}"></div>

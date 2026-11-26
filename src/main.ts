@@ -14,6 +14,7 @@ import {
   howToHTML, icon, renderBattle, renderClassSelect, renderMap, renderReward,
   renderTitle, renderVictory, toastHTML,
 } from './ui';
+import { initHovercard } from './hovercard';
 
 const app = document.getElementById('app')!;
 /** Phones and tablets: wording and layout differ (see the (hover: none) rules in style.css). */
@@ -720,6 +721,7 @@ window.addEventListener('resize', () => {
 /* ---------------------------------- boot ---------------------------------- */
 
 function boot(): void {
+  initHovercard();
   loadSave();
   screen = 'title';
   renderScreen();

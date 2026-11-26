@@ -460,8 +460,51 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   box-shadow: 0 14px 36px rgba(0,0,0,.85);
   transition: opacity .15s; z-index: 25; text-align: left;
 }
-.skill-chip:hover .skill-tip { opacity: 1; }
 .skill-tip b { color: var(--gold-bright); display: block; margin-bottom: 3px; font-family: var(--display); font-size: 11.5px; letter-spacing: 0.04em; }
+@media (hover: hover) { .skill-tip { display: none; } }
+
+/* ------------------------------- Hover card ------------------------------- */
+.hovercard {
+  position: fixed; z-index: 80; width: min(280px, calc(100vw - 16px));
+  padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px;
+  background: linear-gradient(165deg, #191226, #090611); box-shadow: var(--shadow);
+  pointer-events: none; color: var(--ink);
+  animation: hovercardIn 120ms ease-out both;
+}
+.hovercard[hidden] { display: none; }
+.hc-head { display: flex; align-items: center; gap: 10px; }
+.hc-icon {
+  width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 6px; color: var(--gold-bright);
+  background: radial-gradient(circle at 50% 30%, rgba(233, 196, 106, 0.14), rgba(7, 5, 12, 0.9));
+}
+.hc-icon .icon { width: 20px; height: 20px; }
+.hc-titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hc-name { font-family: var(--display); font-size: 14px; font-weight: 700; line-height: 1.2; color: #f8eedb; }
+.hc-type { font-family: var(--display); font-size: 10px; line-height: 1.2; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.hc-desc { margin: 9px 0 0; font-family: var(--body); font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.hc-facts {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 4px;
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line);
+}
+.hc-fact { display: contents; }
+.hc-label { font-family: var(--display); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.hc-value { font-family: var(--body); font-size: 12px; color: var(--ink); }
+.hc-arrow {
+  position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px;
+  background: #0d0817; border-right: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong);
+  transform: translateX(-50%) rotate(45deg);
+}
+.hovercard.below .hc-arrow {
+  bottom: auto; top: -6px; border-right: 0; border-bottom: 0;
+  border-left: 1px solid var(--line-strong); border-top: 1px solid var(--line-strong);
+}
+@keyframes hovercardIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .hovercard { animation: none; } }
+[data-tip]:focus-visible { outline: 2px solid var(--gold-dark); outline-offset: 3px; }
 .class-card .btn { margin-top: 10px; width: 100%; padding: 12px 10px; font-size: 10.5px; }
 .passive-line { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--muted); background: rgba(5, 3, 10, 0.55); border: 1px solid rgba(233, 196, 106, 0.12); border-radius: 6px; padding: 7px 9px; }
 .passive-line .icon { width: 16px; height: 16px; color: var(--cls-accent, var(--gold)); flex: 0 0 auto; margin-top: 1px; }
