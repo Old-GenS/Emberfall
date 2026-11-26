@@ -8,8 +8,10 @@ export interface SaveData {
   xp: number;
   stage: number;        // next stage to play (0..24); 25 = victory
   boons: string[];
-  sound: boolean;
-  music: boolean;
+  sound: boolean;       // false = sound effects muted
+  music: boolean;       // false = music muted
+  sfxVolume: number;    // 0..1, kept while muted
+  musicVolume: number;  // 0..1, kept while muted
   seenIntro: boolean;
 }
 
@@ -17,8 +19,10 @@ const SAVE_KEY = 'emberfall-save-v1';
 
 export const defaultSave = (): SaveData => ({
   version: 1, classId: null, level: 1, xp: 0, stage: 0, boons: [],
-  sound: true, music: true, seenIntro: false,
+  sound: true, music: true, sfxVolume: 1, musicVolume: 1, seenIntro: false,
 });
+
+const volume = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1);
 
 export function loadSave(): SaveData {
   try {
@@ -39,6 +43,8 @@ export function loadSave(): SaveData {
       boons,
       sound: data.sound !== false,
       music: data.music !== false,
+      sfxVolume: volume(data.sfxVolume),
+      musicVolume: volume(data.musicVolume),
       seenIntro: data.seenIntro === true,
     };
   } catch {
@@ -63,7 +69,7 @@ export function persistSave(): void {
 }
 
 export function resetSave(): void {
-  const keep = { sound: save.sound, music: save.music };
+  const keep = { sound: save.sound, music: save.music, sfxVolume: save.sfxVolume, musicVolume: save.musicVolume };
   save = { ...defaultSave(), ...keep };
   persistSave();
   listeners.forEach(l => l());

@@ -82,8 +82,8 @@ class AudioEngine {
   private musicVerb!: GainNode;
   private sfxVerb!: GainNode;
   private noiseBuf!: AudioBuffer;
-  private musicOn = true;
-  private sfxOn = true;
+  private musicLevel = 1; // 0..1, from the music slider (0 when muted)
+  private sfxLevel = 1;
   private currentTheme: ThemeId = 'menu';
   private playing = false;
   private step = 0;
@@ -113,10 +113,10 @@ class AudioEngine {
     this.master.connect(comp).connect(ctx.destination);
 
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = this.musicOn ? 0.22 : 0;
+    this.musicBus.gain.value = 0.22 * this.musicLevel;
     this.musicBus.connect(this.master);
     this.sfxBus = ctx.createGain();
-    this.sfxBus.gain.value = this.sfxOn ? 0.55 : 0;
+    this.sfxBus.gain.value = 0.55 * this.sfxLevel;
     this.sfxBus.connect(this.master);
 
     this.reverb = ctx.createConvolver();
@@ -125,10 +125,10 @@ class AudioEngine {
     this.reverbGain.gain.value = 0.5;
     this.reverbGain.connect(this.reverb).connect(this.master);
     this.musicVerb = ctx.createGain();
-    this.musicVerb.gain.value = this.musicOn ? 1 : 0;
+    this.musicVerb.gain.value = this.musicLevel;
     this.musicVerb.connect(this.reverbGain);
     this.sfxVerb = ctx.createGain();
-    this.sfxVerb.gain.value = this.sfxOn ? 1 : 0;
+    this.sfxVerb.gain.value = this.sfxLevel;
     this.sfxVerb.connect(this.reverbGain);
     this.noiseBuf = this.makeNoise(1.5);
     if (ctx.state === 'suspended') await ctx.resume();
@@ -158,17 +158,19 @@ class AudioEngine {
     return buf;
   }
 
-  setMusicEnabled(on: boolean) {
-    this.musicOn = on;
+  /** Music level 0..1 (slider position, squared so the slider feels even to the ear). */
+  setMusicLevel(v: number) {
+    this.musicLevel = v * v;
     if (!this.ctx) return;
-    this.musicBus.gain.setTargetAtTime(on ? 0.22 : 0, this.ctx.currentTime, 0.1);
-    this.musicVerb.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.1);
+    this.musicBus.gain.setTargetAtTime(0.22 * this.musicLevel, this.ctx.currentTime, 0.08);
+    this.musicVerb.gain.setTargetAtTime(this.musicLevel, this.ctx.currentTime, 0.08);
   }
-  setSfxEnabled(on: boolean) {
-    this.sfxOn = on;
+  /** Sound-effect level 0..1, same curve. */
+  setSfxLevel(v: number) {
+    this.sfxLevel = v * v;
     if (!this.ctx) return;
-    this.sfxBus.gain.setTargetAtTime(on ? 0.55 : 0, this.ctx.currentTime, 0.05);
-    this.sfxVerb.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.05);
+    this.sfxBus.gain.setTargetAtTime(0.55 * this.sfxLevel, this.ctx.currentTime, 0.05);
+    this.sfxVerb.gain.setTargetAtTime(this.sfxLevel, this.ctx.currentTime, 0.05);
   }
 
   playMusic(theme: ThemeId, intensity = false): void {
@@ -400,7 +402,7 @@ class AudioEngine {
   /* ----------------------------------- SFX ----------------------------------- */
 
   private sfxTone(freq: number, dur: number, vol: number, type: OscillatorType = 'sine', slide = 0, delay = 0): void {
-    if (!this.ctx || !this.sfxOn) return;
+    if (!this.ctx || this.sfxLevel <= 0) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + delay;
     const o = ctx.createOscillator();
@@ -419,7 +421,7 @@ class AudioEngine {
   }
 
   private sfxNoise(vol: number, dur: number, freq: number, type: BiquadFilterType = 'bandpass', slide = 0): void {
-    if (!this.ctx || !this.sfxOn) return;
+    if (!this.ctx || this.sfxLevel <= 0) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     const src = ctx.createBufferSource();
@@ -435,7 +437,7 @@ class AudioEngine {
   }
 
   sfx(name: string): void {
-    if (!this.ctx || !this.sfxOn) return;
+    if (!this.ctx || this.sfxLevel <= 0) return;
     switch (name) {
       case 'hit':
         this.sfxNoise(0.16, 0.1, 900, 'bandpass', 0.5);

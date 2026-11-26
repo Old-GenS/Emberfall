@@ -51,8 +51,7 @@ async function ensureAudio(): Promise<void> {
   try {
     await audio.init();
     const save = getSave();
-    audio.setMusicEnabled(save.music);
-    audio.setSfxEnabled(save.sound);
+    applyAudioLevels();
     if (!audio['playing']) audio.playMusic(screen === 'map' || screen === 'reward' ? 'map' : screen === 'battle' ? themeForBattle() : 'menu');
   } catch { /* audio is optional */ }
 }
@@ -106,11 +105,29 @@ function navigate(to: Screen): void {
   renderScreen();
 }
 
+function applyAudioLevels(): void {
+  const s = getSave();
+  audio.setSfxLevel(s.sound ? s.sfxVolume : 0);
+  audio.setMusicLevel(s.music ? s.musicVolume : 0);
+}
+
+/** Bring every sound panel on screen in line with the save (mute state, slider position). */
 function refreshToggles(): void {
-  const save = getSave();
-  document.querySelectorAll<HTMLElement>('[data-action="toggle-sound"]').forEach(el => el.setAttribute('aria-checked', String(save.sound)));
-  document.querySelectorAll<HTMLElement>('[data-action="toggle-music"]').forEach(el => el.setAttribute('aria-checked', String(save.music)));
-  document.querySelectorAll<HTMLElement>('[data-action="audio-menu"]').forEach(el => el.classList.toggle('off', !save.sound && !save.music));
+  const s = getSave();
+  const rows = { sound: { on: s.sound, vol: s.sfxVolume }, music: { on: s.music, vol: s.musicVolume } };
+  for (const [kind, { on, vol }] of Object.entries(rows)) {
+    const pct = Math.round(vol * 100);
+    document.querySelectorAll<HTMLElement>(`[data-action="toggle-${kind}"]`).forEach(el => {
+      el.setAttribute('aria-pressed', String(!on));
+      el.closest('.audio-row')?.classList.toggle('muted', !on || pct === 0);
+    });
+    document.querySelectorAll<HTMLInputElement>(`[data-volume="${kind}"]`).forEach(el => {
+      if (document.activeElement !== el) el.value = String(pct);
+      el.style.setProperty('--pct', `${pct}%`);
+    });
+  }
+  const silent = !(s.sound && s.sfxVolume > 0) && !(s.music && s.musicVolume > 0);
+  document.querySelectorAll<HTMLElement>('[data-action="audio-menu"]').forEach(el => el.classList.toggle('off', silent));
 }
 
 function closeAudioMenus(): boolean {
@@ -134,7 +151,7 @@ function toggleAudioMenu(btn: HTMLElement): void {
   // Opens leftward from the button; flip when that would run off the left edge (phones).
   pop.classList.remove('flip');
   if (pop.getBoundingClientRect().left < 8) pop.classList.add('flip');
-  pop.querySelector<HTMLElement>('.audio-item')?.focus();
+  pop.querySelector<HTMLElement>('.audio-slider')?.focus();
 }
 
 function showModal(html: string): void {
@@ -593,19 +610,14 @@ document.addEventListener('click', (ev) => {
     const action = actionEl.dataset.action;
     if (action === 'howto') { sfx('click'); showModal(howToHTML()); return; }
     if (action === 'audio-menu') { toggleAudioMenu(actionEl); return; }
-    if (action === 'toggle-sound') {
+    if (action === 'toggle-sound' || action === 'toggle-music') {
+      // The icon mutes and unmutes, keeping the slider's level; unmuting at zero restores a usable level.
       const s = getSave();
-      updateSave({ sound: !s.sound });
-      audio.setSfxEnabled(!s.sound);
+      if (action === 'toggle-sound') updateSave({ sound: !s.sound, sfxVolume: !s.sound && s.sfxVolume === 0 ? 0.6 : s.sfxVolume });
+      else updateSave({ music: !s.music, musicVolume: !s.music && s.musicVolume === 0 ? 0.6 : s.musicVolume });
+      applyAudioLevels();
       refreshToggles();
-      if (!s.sound) audio.sfx('click');
-      return;
-    }
-    if (action === 'toggle-music') {
-      const s = getSave();
-      updateSave({ music: !s.music });
-      audio.setMusicEnabled(!s.music);
-      refreshToggles();
+      if (action === 'toggle-sound' && !s.sound) audio.sfx('click');
       return;
     }
     if (action === 'reset') { sfx('click'); confirmReset(); return; }
@@ -663,6 +675,22 @@ document.addEventListener('click', (ev) => {
     closeModal();
     return;
   }
+});
+
+// Volume sliders: dragging sets the level live; moving off zero also unmutes.
+document.addEventListener('input', (ev) => {
+  const el = ev.target as HTMLElement;
+  if (!(el instanceof HTMLInputElement) || !el.dataset.volume) return;
+  const v = Number(el.value) / 100;
+  if (el.dataset.volume === 'sound') updateSave({ sfxVolume: v, ...(v > 0 ? { sound: true } : {}) });
+  else updateSave({ musicVolume: v, ...(v > 0 ? { music: true } : {}) });
+  applyAudioLevels();
+  refreshToggles();
+});
+// Let go of the sound-effects slider and hear the new level.
+document.addEventListener('change', (ev) => {
+  const el = ev.target as HTMLElement;
+  if (el instanceof HTMLInputElement && el.dataset.volume === 'sound') audio.sfx('click');
 });
 
 document.addEventListener('keydown', (ev) => {

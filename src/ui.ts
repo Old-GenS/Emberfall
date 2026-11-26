@@ -39,17 +39,22 @@ const ICON_PATHS: Record<IconName, string> = {
 export const icon = (name: IconName, cls = ''): string =>
   `<span class="icon ${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg></span>`;
 
-const audioItem = (action: string, ic: IconName, label: string, on: boolean): string =>
-  `<button class="audio-item" role="menuitemcheckbox" aria-checked="${on}" data-action="${action}">${icon(ic)}<span>${label}</span><span class="audio-switch" aria-hidden="true"></span></button>`;
+const audioRow = (kind: 'sound' | 'music', ic: IconName, label: string, on: boolean, vol: number): string => {
+  const pct = Math.round(vol * 100);
+  return `<div class="audio-row ${on && pct > 0 ? '' : 'muted'}">
+      <button class="audio-mute" data-action="toggle-${kind}" aria-pressed="${!on}" aria-label="Mute ${label.toLowerCase()}" title="${label}">${icon(ic)}</button>
+      <input class="audio-slider" type="range" min="0" max="100" step="1" value="${pct}" data-volume="${kind}" aria-label="${label} volume" style="--pct:${pct}%">
+    </div>`;
+};
 
-/** One speaker button that opens a small menu with separate sound-effect and music switches. */
+/** One speaker button that opens a small panel: an icon (tap to mute) and a volume slider for sound effects and for music. */
 export function audioMenu(save: SaveData): string {
-  const muted = !save.sound && !save.music;
+  const silent = !(save.sound && save.sfxVolume > 0) && !(save.music && save.musicVolume > 0);
   return `<div class="audio-menu">
-    <button class="btn-icon ${muted ? 'off' : ''}" data-action="audio-menu" aria-haspopup="menu" aria-expanded="false" title="Sound & music">${icon('speaker')}</button>
-    <div class="audio-pop" role="menu" aria-label="Sound & music" hidden>
-      ${audioItem('toggle-sound', 'speaker', 'Sound effects', save.sound)}
-      ${audioItem('toggle-music', 'music', 'Music', save.music)}
+    <button class="btn-icon ${silent ? 'off' : ''}" data-action="audio-menu" aria-haspopup="true" aria-expanded="false" title="Sound & music">${icon('speaker')}</button>
+    <div class="audio-pop" role="group" aria-label="Sound & music" hidden>
+      ${audioRow('sound', 'speaker', 'Sound effects', save.sound, save.sfxVolume)}
+      ${audioRow('music', 'music', 'Music', save.music, save.musicVolume)}
     </div>
   </div>`;
 }
