@@ -39,6 +39,21 @@ const ICON_PATHS: Record<IconName, string> = {
 export const icon = (name: IconName, cls = ''): string =>
   `<span class="icon ${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg></span>`;
 
+const audioItem = (action: string, ic: IconName, label: string, on: boolean): string =>
+  `<button class="audio-item" role="menuitemcheckbox" aria-checked="${on}" data-action="${action}">${icon(ic)}<span>${label}</span><span class="audio-switch" aria-hidden="true"></span></button>`;
+
+/** One speaker button that opens a small menu with separate sound-effect and music switches. */
+export function audioMenu(save: SaveData): string {
+  const muted = !save.sound && !save.music;
+  return `<div class="audio-menu">
+    <button class="btn-icon ${muted ? 'off' : ''}" data-action="audio-menu" aria-haspopup="menu" aria-expanded="false" title="Sound & music">${icon('speaker')}</button>
+    <div class="audio-pop" role="menu" aria-label="Sound & music" hidden>
+      ${audioItem('toggle-sound', 'speaker', 'Sound effects', save.sound)}
+      ${audioItem('toggle-music', 'music', 'Music', save.music)}
+    </div>
+  </div>`;
+}
+
 /** Gothic Stained-Glass Eclipsed Sun & Rose-Window Emblem */
 const EMBLEM = `<svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
   <defs>
@@ -123,8 +138,7 @@ export function renderTitle(save: SaveData): string {
         <button class="btn" data-action="howto">Codex &amp; Rules</button>
       </div>
       <div class="sound-row">
-        <button class="btn-icon ${save.music ? '' : 'off'}" data-action="toggle-music" title="${save.music ? 'Music on' : 'Music off'}">${icon('music')}</button>
-        <button class="btn-icon ${save.sound ? '' : 'off'}" data-action="toggle-sound" title="${save.sound ? 'Sound on' : 'Sound off'}">${icon('speaker')}</button>
+        ${audioMenu(save)}
         <span style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)">Sanctum Audio</span>
       </div>
       <div class="title-footer">
@@ -222,8 +236,7 @@ export function renderMap(save: SaveData): string {
       <div class="top-bar">
         <div class="brand"><div class="mark">${EMBLEM}</div><h1>Emberfall <span>Atlas of the Shattered Vale</span></h1></div>
         <div class="top-actions">
-          <button class="btn-icon ${save.music ? '' : 'off'}" data-action="toggle-music" title="${save.music ? 'Music on' : 'Music off'}">${icon('music')}</button>
-          <button class="btn-icon ${save.sound ? '' : 'off'}" data-action="toggle-sound" title="${save.sound ? 'Sound on' : 'Sound off'}">${icon('speaker')}</button>
+          ${audioMenu(save)}
           <button class="btn-icon" data-action="howto" title="Codex &amp; Rules">${icon('star')}</button>
           <button class="btn ghost small" data-nav="title">Sanctum</button>
         </div>
@@ -288,7 +301,7 @@ export function renderBattle(info: BattleUIInfo): string {
           <div class="wave-chip">${icon('skull')} <span id="wave-count">${boss ? 'Boss' : 'Wave'}</span></div>
           <button class="btn-icon" id="pause-btn" title="Pause (Esc)">${icon('pause')}</button>
           <button class="btn-icon speed-btn" id="speed-btn" title="Toggle battle speed" style="font-size:11px;font-weight:700">1×</button>
-          <button class="btn-icon ${save.sound ? '' : 'off'}" data-action="toggle-sound" title="${save.sound ? 'Sound on' : 'Sound off'}">${icon('speaker')}</button>
+          ${audioMenu(save)}
         </div>
       </div>
       <div class="arena" id="arena" style="--realm-glow:${location.palette.accent}">

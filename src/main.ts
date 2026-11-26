@@ -108,16 +108,33 @@ function navigate(to: Screen): void {
 
 function refreshToggles(): void {
   const save = getSave();
-  document.querySelectorAll<HTMLElement>('[data-action="toggle-sound"]').forEach(el => {
-    el.innerHTML = icon('speaker');
-    el.title = save.sound ? 'Sound on' : 'Sound off';
-    el.classList.toggle('off', !save.sound);
+  document.querySelectorAll<HTMLElement>('[data-action="toggle-sound"]').forEach(el => el.setAttribute('aria-checked', String(save.sound)));
+  document.querySelectorAll<HTMLElement>('[data-action="toggle-music"]').forEach(el => el.setAttribute('aria-checked', String(save.music)));
+  document.querySelectorAll<HTMLElement>('[data-action="audio-menu"]').forEach(el => el.classList.toggle('off', !save.sound && !save.music));
+}
+
+function closeAudioMenus(): boolean {
+  let closed = false;
+  document.querySelectorAll<HTMLElement>('.audio-pop:not([hidden])').forEach(pop => {
+    pop.hidden = true;
+    pop.parentElement?.querySelector('[data-action="audio-menu"]')?.setAttribute('aria-expanded', 'false');
+    closed = true;
   });
-  document.querySelectorAll<HTMLElement>('[data-action="toggle-music"]').forEach(el => {
-    el.innerHTML = icon('music');
-    el.title = save.music ? 'Music on' : 'Music off';
-    el.classList.toggle('off', !save.music);
-  });
+  return closed;
+}
+
+function toggleAudioMenu(btn: HTMLElement): void {
+  const pop = btn.parentElement?.querySelector<HTMLElement>('.audio-pop');
+  if (!pop) return;
+  const opening = pop.hidden;
+  closeAudioMenus();
+  if (!opening) return;
+  pop.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  // Opens leftward from the button; flip when that would run off the left edge (phones).
+  pop.classList.remove('flip');
+  if (pop.getBoundingClientRect().left < 8) pop.classList.add('flip');
+  pop.querySelector<HTMLElement>('.audio-item')?.focus();
 }
 
 function showModal(html: string): void {
@@ -558,6 +575,7 @@ function confirmReset(): void {
 
 document.addEventListener('click', (ev) => {
   const target = ev.target as HTMLElement;
+  if (!target.closest('.audio-menu')) closeAudioMenus();
   const navEl = target.closest<HTMLElement>('[data-nav]');
   if (navEl) {
     ev.preventDefault();
@@ -574,6 +592,7 @@ document.addEventListener('click', (ev) => {
   if (actionEl) {
     const action = actionEl.dataset.action;
     if (action === 'howto') { sfx('click'); showModal(howToHTML()); return; }
+    if (action === 'audio-menu') { toggleAudioMenu(actionEl); return; }
     if (action === 'toggle-sound') {
       const s = getSave();
       updateSave({ sound: !s.sound });
@@ -648,6 +667,7 @@ document.addEventListener('click', (ev) => {
 
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape') {
+    if (closeAudioMenus()) return;
     if (modalOpen) { closeModal(); return; }
     if (screen === 'battle') togglePause();
   }
