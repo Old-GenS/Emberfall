@@ -398,7 +398,7 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   background: linear-gradient(transparent, rgba(9, 7, 15, 0.98));
   pointer-events: none; z-index: 1;
 }
-.class-body { padding: 6px 17px 17px; display: flex; flex-direction: column; flex: 1; gap: 9px; position: relative; z-index: 2; margin-top: -22px; }
+.class-body { padding: 6px 17px 17px; display: flex; flex-direction: column; flex: 1; gap: 9px; position: relative; z-index: 2; margin-top: 0; padding-top: 12px; }
 .class-body h2 { font-size: 21px; color: #f8f1e1; }
 .class-title { font-family: var(--display); color: var(--cls-accent, var(--gold)); font-size: 9.5px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; }
 .class-tagline { font-family: var(--serif); font-style: italic; color: #d6cce2; font-size: 15.5px; line-height: 1.32; min-height: 40px; }

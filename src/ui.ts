@@ -236,10 +236,10 @@ export function renderMap(save: SaveData): string {
           <div class="lvl-line"><span>Rank <b>${save.level}</b></span><span>${xp.cur} / ${xp.need} XP</span></div>
           <div class="xp-bar"><span style="width:${(xp.pct * 100).toFixed(1)}%"></span></div>
           <div class="hero-meta">
-            <div class="mini-stat"><span>Vitality</span><b>${Math.round(s.maxHp)}</b></div>
-            <div class="mini-stat"><span>Might</span><b>${Math.round(s.atk)}</b></div>
-            <div class="mini-stat"><span>Ward</span><b>${Math.round(s.armor)}</b></div>
-            <div class="mini-stat"><span>Precision</span><b>${Math.round(s.crit * 100)}%</b></div>
+            <div class="mini-stat"><span>Health</span><b>${Math.round(s.maxHp)}</b></div>
+            <div class="mini-stat"><span>Attack</span><b>${Math.round(s.atk)}</b></div>
+            <div class="mini-stat"><span>Defence</span><b>${Math.round(s.armor)}</b></div>
+            <div class="mini-stat"><span>Crit</span><b>${Math.round(s.crit * 100)}%</b></div>
           </div>
           ${boonPills(save.boons)}
           <div class="actions">
@@ -285,7 +285,7 @@ export function renderBattle(info: BattleUIInfo): string {
           </div>
         </div>
         <div class="battle-controls">
-          <div class="wave-chip">${icon('skull')} <span id="wave-count">${boss ? 'Boss' : 'Host'}</span></div>
+          <div class="wave-chip">${icon('skull')} <span id="wave-count">${boss ? 'Boss' : 'Wave'}</span></div>
           <button class="btn-icon" id="pause-btn" title="Pause (Esc)">${icon('pause')}</button>
           <button class="btn-icon speed-btn" id="speed-btn" title="Toggle battle speed" style="font-size:11px;font-weight:700">1×</button>
           <button class="btn-icon ${save.sound ? '' : 'off'}" data-action="toggle-sound" title="${save.sound ? 'Sound on' : 'Sound off'}">${icon('speaker')}</button>
@@ -314,7 +314,7 @@ export function renderBattle(info: BattleUIInfo): string {
             <span class="k">✦ Ultimate Arcana</span>
             <b>${cls.ultimate.name}</b>
             <span>${cls.ultimate.desc}</span>
-            <span class="ult-pct" id="ult-pct">Kindling · 0%</span>
+            <span class="ult-pct" id="ult-pct">Charging · 0%</span>
           </div>
         </div>
       </div>
