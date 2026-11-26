@@ -109,6 +109,12 @@
       "h": 640,
       "footX": 235
     },
+    "spirit-wolf": {
+      "file": "spirit-wolf.webp",
+      "w": 578,
+      "h": 640,
+      "footX": 389
+    },
     "spiritcaller": {
       "file": "spiritcaller.webp",
       "w": 329,
@@ -117,9 +123,9 @@
     },
     "spore-wisp": {
       "file": "spore-wisp.webp",
-      "w": 551,
+      "w": 405,
       "h": 640,
-      "footX": 184
+      "footX": 101
     },
     "tide-revenant": {
       "file": "tide-revenant.webp",

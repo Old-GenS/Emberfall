@@ -25,6 +25,8 @@ interface Patch {
 interface UnitOptions {
   flip?: boolean;
   hueKey?: boolean;
+  /** Despill every opaque pixel, not just the edge band (a glow that blends wide into the screen). */
+  despillAll?: boolean;
 }
 
 type KeyType = 'green' | 'magenta' | 'other';
@@ -256,7 +258,7 @@ function removeSpecks(img: RawImage): void {
  * leaves a dark, half-blended rim carrying the screen's hue (a magenta outline around vines); this
  * pulls that hue back to the body's own colour.
  */
-function despillEdges(img: RawImage, keyType: KeyType, hueKey: boolean): void {
+function despillEdges(img: RawImage, keyType: KeyType, hueKey: boolean, all = false): void {
   if (!hueKey || keyType === 'other') return;
   const { data, width, height } = img;
   const n = width * height;
@@ -294,7 +296,7 @@ function despillEdges(img: RawImage, keyType: KeyType, hueKey: boolean): void {
     const i = p * 4;
     if (data[i + 3]! <= 40) continue;
     const d = dist[p]!;
-    if (d < 1 || d > radius) continue;
+    if (!all && (d < 1 || d > radius)) continue;
     const r = data[i]!;
     const g = data[i + 1]!;
     const b = data[i + 2]!;
@@ -498,7 +500,7 @@ async function prepareFile(
   }
 
   removeSpecks(img);
-  despillEdges(img, keyType, hueKey);
+  despillEdges(img, keyType, hueKey, options.despillAll === true);
   const opaque = opaqueFraction(img);
   if (opaque < 0.03 || opaque > 0.90) {
     throw new Error(`opaque fraction ${(opaque * 100).toFixed(2)}% outside [3%, 90%]`);
@@ -590,7 +592,7 @@ async function loadOptions(
     }
     const unit: UnitOptions = {};
     for (const [key, value] of Object.entries(raw)) {
-      if (key !== 'flip' && key !== 'hueKey') {
+      if (key !== 'flip' && key !== 'hueKey' && key !== 'despillAll') {
         console.warn(`warn: options: ignoring unknown key ${id}.${key}`);
         continue;
       }
@@ -599,6 +601,7 @@ async function loadOptions(
         continue;
       }
       if (key === 'flip') unit.flip = value;
+      else if (key === 'despillAll') unit.despillAll = value;
       else unit.hueKey = value;
     }
     options.set(id, unit);
