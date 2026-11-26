@@ -91,8 +91,62 @@ function cornerBackground(img: RawImage): { r: number; g: number; b: number } {
   return { r: median(rs), g: median(gs), b: median(bs) };
 }
 
+/** Root-mean-square distance of the corner pixels from their median colour: how noisy the screen is. */
+function cornerNoise(img: RawImage, B: { r: number; g: number; b: number }): number {
+  const s = Math.max(1, Math.min(PATCH_SIZE, img.width, img.height));
+  const patches = patchesFor(img.width, img.height);
+  let sum = 0;
+  let n = 0;
+  for (const p of patches) {
+    for (let y = p.y; y < p.y + s; y++) {
+      for (let x = p.x; x < p.x + s; x++) {
+        const i = (y * img.width + x) * 4;
+        const dr = img.data[i]! - B.r;
+        const dg = img.data[i + 1]! - B.g;
+        const db = img.data[i + 2]! - B.b;
+        sum += dr * dr + dg * dg + db * db;
+        n++;
+      }
+    }
+  }
+  return Math.sqrt(sum / Math.max(1, n));
+}
+
+/**
+ * Squared-up green screen left behind: pixels anywhere in the frame whose green dominates red and
+ * blue by a wide margin. The corner-median key misses the screen where it is tinted by a painted
+ * ground shadow (the Ashen King's feet, the wolf's flank). Only runs for a green screen, so the
+ * Spiritcaller — keyed from pink, and green itself — is untouched by it.
+ */
+function keyResidualGreen(img: RawImage, B: { r: number; g: number; b: number }): void {
+  if (!(B.g > 150 && B.g - B.r > 80 && B.g - B.b > 80)) return;
+  const { data, width, height } = img;
+  for (let p = 0; p < width * height; p++) {
+    const i = p * 4;
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+    if (g > 90 && g - Math.max(r, b) > 55) data[i + 3] = 0;
+  }
+}
+
 function keyBackground(img: RawImage): void {
   const B = cornerBackground(img);
+  // A pure screen (0,255,0 everywhere) keys with a 36-wide core; a textured one (the Spiritcaller
+  // was exported on mottled pink, rms noise 28 per channel) needs the core to cover its noise, or
+  // about half the background survives as a semi-opaque haze. Scale both edges with the noise.
+  const noise = cornerNoise(img, B);
+  const core = Math.max(36, noise * 2.5);
+  const soft = Math.max(48, noise * 2);
+  // A screen with a gradient or vignette (the Spiritcaller: pink from 169,0,51 to 241,102,157) cannot
+  // be keyed by distance to one colour without eating the subject. Key such a screen by hue instead:
+  // a pixel is background when its dominant channel is the screen's dominant channel by a wide
+  // margin, and the screen's weakest channel is weak in it too. Grey and dark subject pixels fail
+  // both tests whatever their brightness.
+  const chans = [B.r, B.g, B.b];
+  const dom = chans.indexOf(Math.max(...chans));
+  const weak = chans.indexOf(Math.min(...chans));
+  const byHue = noise > 12;
   const { data, width, height } = img;
   for (let p = 0; p < width * height; p++) {
     const i = p * 4;
@@ -103,7 +157,14 @@ function keyBackground(img: RawImage): void {
     const dg = g - B.g;
     const db = b - B.b;
     const d = Math.sqrt(dr * dr + dg * dg + db * db);
-    const a = clamp((d - 36) / 48, 0, 1);
+    let a = clamp((d - core) / soft, 0, 1);
+    if (byHue) {
+      const c = [r, g, b];
+      const margin = (c[dom]! - Math.max(...c.filter((_, k) => k !== dom))) / 255;
+      const weakness = 1 - c[weak]! / 255;
+      const bg = Math.min(margin / 0.25, (weakness - 0.35) / 0.25);
+      a = clamp(1 - bg, 0, 1) * Math.max(a, bg > 0.5 ? 0 : 1);
+    }
     const alpha = Math.min(data[i + 3]!, Math.round(a * 255));
     data[i + 3] = alpha;
     if (a > 0.05 && a < 1) {
@@ -261,7 +322,10 @@ async function prepareFile(inputPath: string, name: string, outDir: string): Pro
   const img: RawImage = { data: loaded.data, width: loaded.info.width, height: loaded.info.height };
 
   const keyed = allCornerMeanAlpha(img) >= 16;
-  if (keyed) keyBackground(img);
+  if (keyed) {
+    keyBackground(img);
+    keyResidualGreen(img, cornerBackground(img));
+  }
 
   const s = Math.max(1, Math.min(PATCH_SIZE, img.width, img.height));
   for (const patch of patchesFor(img.width, img.height)) {

@@ -4,3 +4,6 @@ dist
 balance-out
 sprite-out
 art/units/
+art/units/
+art/source/
+art/*.zip
