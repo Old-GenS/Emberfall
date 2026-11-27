@@ -24,12 +24,34 @@ function getRealmImage(locId: string): HTMLImageElement | null {
   return img.complete && img.naturalWidth > 0 ? img : null;
 }
 
+const FIRE_COLOR = '#ff9442';
+
+/* ------------------------- Painted effect sprites ------------------------- */
+
+/** Painted effects on pure black (public/assets/fx), drawn additively so black vanishes. */
+export const FX_SPRITES = ['fire-burst', 'slash', 'slash-heavy'] as const;
+export type FxSpriteName = (typeof FX_SPRITES)[number];
+const fxImages = new Map<string, HTMLImageElement>();
+
+function getFxImage(name: FxSpriteName): HTMLImageElement | null {
+  if (typeof Image === 'undefined') return null;
+  let img = fxImages.get(name);
+  if (!img) {
+    img = new Image();
+    img.decoding = 'async';
+    img.src = `${ASSET_BASE}/fx/${name}.webp`;
+    fxImages.set(name, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
 /** Eagerly warm all 5 realm backdrops & portraits once the browser is idle. */
 export function preloadArtAssets(): void {
   if (typeof Image === 'undefined') return;
   const realms = ['ashen-reach', 'whisperwood', 'frostveil', 'sunken-sanctum', 'ember-throne'];
   const heroes = ['warden', 'pyromancer', 'shadowblade', 'spiritcaller'];
   for (const r of realms) getRealmImage(r);
+  for (const f of FX_SPRITES) getFxImage(f);
   for (const h of heroes) {
     const img = new Image();
     img.decoding = 'async';
@@ -131,6 +153,11 @@ interface ExecutionMark {
   x: number; y: number; color: string; life: number; maxLife: number;
 }
 
+interface FxSprite {
+  name: FxSpriteName; x: number; y: number; size: number; rot: number; spin: number;
+  flip: boolean; life: number; maxLife: number; delay: number; grow: number;
+}
+
 interface Floater {
   x: number; y: number; text: string; color: string; life: number; maxLife: number;
   size: number; vy: number; banner?: boolean;
@@ -162,6 +189,7 @@ export class SceneRenderer {
   private briars: BriarEruption[] = [];
   private marks: ExecutionMark[] = [];
   private floaters: Floater[] = [];
+  private fxSprites: FxSprite[] = [];
   private ambient: Ambient[] = [];
 
   private shake = 0;
@@ -208,6 +236,7 @@ export class SceneRenderer {
   setBattle(battle: Battle): void {
     this.battle = battle;
     this.enrageStartedAt = null;
+    this.fxSprites = [];
     this.enrage = enrageMultiplier(battle.elapsed);
   }
 
@@ -286,7 +315,11 @@ export class SceneRenderer {
         const color = e.kind === 'dot' ? '#9bffb8' : e.crit ? '#ffe082' : e.kind === 'thorns' ? '#d4b8ff' : '#fff3e0';
 
         // Crisp weapon slash arc on direct melee hits!
-        if (e.kind === 'attack') {
+        if (e.kind === 'attack' && getFxImage('slash')) {
+          this.spawnFx('slash', pos.x - facing * 6, pos.y - 78 * pos.scale, (e.crit ? 170 : 128) * pos.scale, {
+            flip: facing < 0, rot: (Math.random() - 0.5) * 0.5, life: e.crit ? 0.4 : 0.32,
+          });
+        } else if (e.kind === 'attack') {
           const slashCol = e.source.colors.main ?? '#ffe29a';
           const slashGlow = e.source.colors.glow ?? '#ffae42';
           this.slashes.push({
@@ -444,6 +477,7 @@ export class SceneRenderer {
       for (const f of aliveFoes) {
         const fp = this.unitPosition(f);
         this.pillars.push({ x: fp.x, y: fp.y, width: 88, color: '#ffb347', glow: '#ff4e22', life: 0.85, maxLife: 0.85, meteor: true });
+        this.spawnFx('fire-burst', fp.x, fp.y - 60 * fp.scale, 250 * fp.scale, { delay: 0.32, life: 0.8 });
       }
       return;
     }
@@ -473,6 +507,7 @@ export class SceneRenderer {
       for (const f of targets) {
         const fp = this.unitPosition(f);
         this.pillars.push({ x: fp.x, y: fp.y, width: isUlt ? 96 : 64, color: col, glow: '#ffffff', life: 0.72, maxLife: 0.72 });
+        if (col === FIRE_COLOR) this.spawnFx('fire-burst', fp.x, fp.y - 66 * fp.scale, (isUlt ? 230 : 170) * fp.scale, { delay: 0.18, life: 0.7 });
       }
       return;
     }
@@ -484,6 +519,7 @@ export class SceneRenderer {
         this.slashes.push({ x: tgt.x, y: tgt.y - 76 * tgt.scale, radius: 68, angle: facing > 0 ? 0.6 : 3.8, sweep: 1.5, color: '#7df2c0', glow: col, life: 0.38, maxLife: 0.38, dir: -1 });
       }
       if (id === 'shield-slam') this.ring(tgt.x, tgt.y - 70, '#ffe29a', 0.45, 68);
+      this.spawnFx('slash-heavy', tgt.x, tgt.y - 80 * tgt.scale, 190 * tgt.scale, { flip: facing < 0, rot: (Math.random() - 0.5) * 0.4, life: 0.42 });
       return;
     }
 
@@ -503,6 +539,8 @@ export class SceneRenderer {
           maxLife: 0.32,
           size: id === 'ember-lance' || id === 'breath' ? 13 : 9,
         });
+        // The bolt lands after its 0.32 s flight; fire spells burst on impact.
+        if (col === FIRE_COLOR) this.spawnFx('fire-burst', fp.x, fp.y - 72 * fp.scale, (id === 'flame-nova' ? 150 : 175) * fp.scale, { delay: 0.3, life: 0.65 });
       }
       return;
     }
@@ -538,7 +576,7 @@ export class SceneRenderer {
 
   private abilityColor(name: string): string {
     const n = name.toLowerCase();
-    if (n.includes('flame') || n.includes('ember') || n.includes('cinder') || n.includes('meteor') || n.includes('searing') || n.includes('furnace')) return '#ff9442';
+    if (n.includes('flame') || n.includes('ember') || n.includes('cinder') || n.includes('meteor') || n.includes('searing') || n.includes('furnace')) return FIRE_COLOR;
     if (n.includes('frost') || n.includes('ice') || n.includes('blizzard') || n.includes('chill') || n.includes('avalanche')) return '#9fe8ff';
     if (n.includes('spirit') || n.includes('bloom') || n.includes('gaia') || n.includes('thorn') || n.includes('wolf') || n.includes('bramble') || n.includes('spore')) return '#8dffc2';
     if (n.includes('shield') || n.includes('ward') || n.includes('unbreak') || n.includes('dawn')) return '#ffd77a';
@@ -546,6 +584,44 @@ export class SceneRenderer {
     if (n.includes('void') || n.includes('dusk') || n.includes('crown')) return '#ff7ad9';
     if (n.includes('abyss') || n.includes('maelstrom') || n.includes('tide') || n.includes('drown')) return '#6ff4e0';
     return '#ffd27a';
+  }
+
+  private spawnFx(name: FxSpriteName, x: number, y: number, size: number, o: { flip?: boolean; rot?: number; spin?: number; life?: number; delay?: number; grow?: number } = {}): void {
+    if (!getFxImage(name)) return;
+    const life = o.life ?? 0.4;
+    this.fxSprites.push({
+      name, x, y, size, rot: o.rot ?? (name === 'fire-burst' ? Math.random() * Math.PI * 2 : 0),
+      spin: o.spin ?? (name === 'fire-burst' ? 0.9 : 0), flip: !!o.flip, life, maxLife: life,
+      delay: o.delay ?? 0, grow: o.grow ?? (name === 'fire-burst' ? 0.6 : 0.3),
+    });
+  }
+
+  private drawFxSprites(ctx: CanvasRenderingContext2D, dt: number): void {
+    if (!this.fxSprites.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = this.fxSprites.length - 1; i >= 0; i--) {
+      const f = this.fxSprites[i];
+      if (f.delay > 0) { f.delay -= dt; continue; }
+      f.life -= dt;
+      if (f.life <= 0) { this.fxSprites.splice(i, 1); continue; }
+      const img = getFxImage(f.name);
+      if (!img) continue;
+      const t = 1 - f.life / f.maxLife;
+      // Pop in fast, then swell gently while fading out.
+      const ease = 1 - (1 - t) ** 3;
+      const scale = 0.7 + f.grow * ease;
+      const alpha = t < 0.12 ? t / 0.12 : Math.max(0, 1 - ((t - 0.12) / 0.88) ** 1.6);
+      const s = f.size * scale;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.rot + f.spin * t);
+      if (f.flip) ctx.scale(-1, 1);
+      ctx.drawImage(img, -s / 2, -s / 2, s, s);
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   private ring(x: number, y: number, color: string, life: number, size: number): void {
@@ -613,6 +689,7 @@ export class SceneRenderer {
     this.drawSkyPillars(ctx, dt);
     this.drawBolts(ctx, dt);
     this.drawSlashes(ctx, dt);
+    this.drawFxSprites(ctx, dt);
     this.drawMarks(ctx, dt);
     this.drawParticles(ctx, dt);
     this.drawFloaters(ctx, dt);
