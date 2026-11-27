@@ -61,7 +61,7 @@ const requested = new Set<string>();
 export function artIdFor(u: Unit): string | null {
   if (u.side === 'hero') return u.classId ?? null;
   if (u.side === 'ally') return 'spirit-wolf';
-  if (u.side === 'enemy') return ENEMY_ID_BY_NAME.get(u.name) ?? null;
+  if (u.side === 'enemy') return u.defId ?? ENEMY_ID_BY_NAME.get(u.name) ?? null;
   return null;
 }
 

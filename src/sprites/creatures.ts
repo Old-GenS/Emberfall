@@ -13,7 +13,7 @@ export function drawCreatureGothic(
   time: number,
   isAlly: boolean,
 ): void {
-  const slug = slugifyUnit(u.name);
+  const slug = u.defId ?? slugifyUnit(u.name);
   const breath = Math.sin(time * 2.3 + u.uid * 1.1) * 2.2;
   const atk = u.anim.attack;
   const cast = u.anim.cast;

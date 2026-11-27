@@ -40,6 +40,8 @@ export interface Unit {
   boss: boolean;
   scale: number;
   heavy?: HeavyDef;
+  /** The EnemyDef id (enemies only). Names can carry an affix prefix, so art and lookups use this. */
+  defId?: string;
   /** The elite affix this unit rolled, if any. */
   affix?: AffixId;
   /** Seconds until this unit's heavy may start. Infinity when it has none. */
@@ -132,6 +134,7 @@ export function makeEnemyUnit(inst: EnemyInstance, stage: number): Unit {
     boss: !!def.boss,
     scale: def.scale ?? 1,
     heavy: def.heavy,
+    defId: def.id,
     heavyCd: def.heavy ? def.heavy.first : Infinity,
     affix: inst.affix,
   });
