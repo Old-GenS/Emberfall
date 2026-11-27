@@ -528,6 +528,11 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
 .lvl-line b { color: var(--gold-bright); font-family: var(--display); font-size: 13px; }
 .xp-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.07); border: 1px solid rgba(233,196,106,.16); overflow: hidden; margin-top: 6px; }
 .xp-bar span { display: block; height: 100%; background: linear-gradient(90deg, #8c6527, #ffe2a0); transition: width .5s; }
+.hp-line { display: flex; justify-content: space-between; align-items: baseline; margin-top: 9px; font-size: 10px; color: var(--muted); font-family: var(--display); letter-spacing: .1em; text-transform: uppercase; }
+.hp-line b { color: #ffb38a; font-family: var(--body); font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.hp-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,138,76,.2); overflow: hidden; margin-top: 5px; }
+.hp-bar span { display: block; height: 100%; background: linear-gradient(90deg, #7a2f1f, #ff9a62); transition: width .5s; }
+.affix { color: #ff9a4c; text-shadow: 0 0 10px rgba(255,110,50,.35); cursor: help; }
 .hero-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
 .mini-stat { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 56px; padding: 7px 8px; background: rgba(5,3,10,.55); border: 1px solid var(--line-soft); border-radius: 6px; }
 .mini-stat span { font-family: var(--display); font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
@@ -907,7 +912,7 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   .hero-panel { position: static; display: grid; grid-template-columns: 98px 1fr; gap: 12px; align-items: start; }
   .hero-panel .hp-portrait { grid-row: span 3; aspect-ratio: 1; }
   .hero-panel h3 { margin-top: 0; }
-  .hero-panel .hero-meta, .hero-panel .boon-details, .hero-panel .actions, .hero-panel .xp-bar, .hero-panel .lvl-line { grid-column: 2; }
+  .hero-panel .hero-meta, .hero-panel .boon-details, .hero-panel .actions, .hero-panel .xp-bar, .hero-panel .hp-bar, .hero-panel .hp-line, .hero-panel .lvl-line { grid-column: 2; }
   .hero-panel .hero-meta { order: 4; }
   .hero-panel .actions { order: 5; flex-direction: row; flex-wrap: wrap; }
   .hero-panel .boon-details { order: 6; }

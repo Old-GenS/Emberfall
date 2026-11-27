@@ -50,6 +50,8 @@ export function evaluateTargets(x: Matrix): Verdict[] {
     perClass((c) => `${m(x, R, c).firstTryNormalPct.toFixed(0)}%`), every((c) => m(x, R, c).firstTryNormalPct >= 90));
   add('normal-teeth', 'Normal fights cost real health', 'A normal stage that never dents the hero’s health is a formality, and a heavy you can ignore is not a decision. Winning should still hurt.', 'lowest health in a won first-try normal fight: mean 35–85%, each class',
     perClass((c) => `${m(x, R, c).hpLeftNormalPct.toFixed(0)}%`), every((c) => m(x, R, c).hpLeftNormalPct >= 35 && m(x, R, c).hpLeftNormalPct <= 85));
+  add('attrition', 'Health carries weight', 'A realm is one stretch of road: sloppy normal fights should leave you weaker at the boss, but never hopeless.', 'mean health entering first-try boss fights 40–85%, each class',
+    perClass((c) => `${m(x, R, c).bossEntryHpPct.toFixed(0)}%`), every((c) => m(x, R, c).bossEntryHpPct >= 40 && m(x, R, c).bossEntryHpPct <= 85));
   const walls = [...x.values()].flatMap((cm) => [...cm.values()].filter((r) => r.walled > 0).map((r) => `${r.tier}/${r.classId}:${r.walled}`));
   add('no-wall', 'Nobody gets stuck', '"Retry a stage as many times as you like" and no way to drop a boon: a stage the Rally bonus cannot carry a player through means abandoning the run.', '0 walled runs, every tier',
     walls.length ? walls.join(' · ') : 'none', walls.length === 0);

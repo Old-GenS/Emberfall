@@ -64,11 +64,11 @@ function report(o: Opts): void {
   const metrics = [];
   for (const t of tiers) for (const c of classes) metrics.push(summarize(t.id, c, results.filter((r) => r.tier === t.id && r.classId === c)));
   console.log(table(
-    ['Tier', 'Class', 'Runs', 'Done', 'Stage', 'Retries', 'Walled', 'Boss 1st', 'Norm 1st', 'HP N', 'HP B', 'Guard/f', 'Ult≥1 N', 'Ult≥1 B', 'Ults/f', 'Norm dur', 'Boss dur', 'Boss p90', 'Lv'],
-    metrics.map((m) => [m.tier, m.classId, m.runs, pc(m.completionPct), f1(m.meanStageReached), f1(m.meanRetries), m.walled, pc(m.firstTryBossPct), pc(m.firstTryNormalPct), pc(m.hpLeftNormalPct), pc(m.hpLeftBossPct), f1(m.perfectPerFight), pc(m.ultReadyNormalPct), pc(m.ultReadyBossPct), f1(m.ultsPerFight), sec(m.normalDur), sec(m.bossDur), sec(m.bossDurP90), f1(m.meanLevel)]),
+    ['Tier', 'Class', 'Runs', 'Done', 'Stage', 'Retries', 'Walled', 'Boss 1st', 'Norm 1st', 'HP N', 'HP B', 'HP@B', 'Guard/f', 'Ult≥1 N', 'Ult≥1 B', 'Ults/f', 'Norm dur', 'Boss dur', 'Boss p90', 'Lv'],
+    metrics.map((m) => [m.tier, m.classId, m.runs, pc(m.completionPct), f1(m.meanStageReached), f1(m.meanRetries), m.walled, pc(m.firstTryBossPct), pc(m.firstTryNormalPct), pc(m.hpLeftNormalPct), pc(m.hpLeftBossPct), pc(m.bossEntryHpPct), f1(m.perfectPerFight), pc(m.ultReadyNormalPct), pc(m.ultReadyBossPct), f1(m.ultsPerFight), sec(m.normalDur), sec(m.bossDur), sec(m.bossDurP90), f1(m.meanLevel)]),
   ));
   console.log('\n(Done = runs that reached the ending · Stage = mean stage reached, 25 = done · Retries = defeats per run · Walled = runs that hit a stage they could not clear ·');
-  console.log(' Boss/Norm 1st = first-try win rate on boss / normal stages · HP N/B = mean health left after a won first-try fight · Guard/f = perfect guards per fight ·');
+  console.log(' Boss/Norm 1st = first-try win rate on boss / normal stages · HP N/B = mean health left after a won first-try fight · HP@B = mean health entering a first-try boss · Guard/f = perfect guards per fight ·');
   console.log(' Ult≥1 = fights in which the ultimate reached Ready at least once · Ults/f = ults cast per fight ·)');
   console.log(' durations are means over first-try wins · Lv = final level)\n');
 

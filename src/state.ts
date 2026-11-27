@@ -14,41 +14,55 @@ export interface SaveData {
   musicVolume: number;  // 0..1, kept while muted
   seenIntro: boolean;
   battleSpeed: 1 | 2 | 3; // remembered battle pace, cycled by the speed button
+  runSeed: number;      // seeds this run's random waves; a retry keeps it, a new run rolls a new one
+  hpPct: number;        // hero health share entering the next stage, 0..1
 }
 
 const SAVE_KEY = 'emberfall-save-v1';
 
+export function newRunSeed(): number {
+  return Math.floor(Math.random() * 2 ** 31);
+}
+
 export const defaultSave = (): SaveData => ({
   version: 1, classId: null, level: 1, xp: 0, stage: 0, boons: [],
   sound: true, music: true, sfxVolume: 1, musicVolume: 1, seenIntro: false, battleSpeed: 1,
+  runSeed: newRunSeed(), hpPct: 1,
 });
 
 const volume = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1);
 
+export function normalizeSave(data: Partial<SaveData>): SaveData {
+  const base = defaultSave();
+  const classId = data.classId && CLASSES.some(c => c.id === data.classId) ? data.classId : null;
+  const boons = Array.isArray(data.boons) ? data.boons.filter(id => typeof id === 'string' && ALL_BOONS.some(b => b.id === id)) : [];
+  const runSeed = typeof data.runSeed === 'number' && Number.isInteger(data.runSeed) && data.runSeed >= 0 ? data.runSeed : newRunSeed();
+  return {
+    ...base,
+    ...data,
+    classId,
+    level: Math.min(BALANCE.hero.maxLevel, Math.max(1, Number(data.level) || 1)),
+    xp: Math.max(0, Number(data.xp) || 0),
+    stage: Math.min(25, Math.max(0, Math.floor(Number(data.stage) || 0))),
+    boons,
+    sound: data.sound !== false,
+    music: data.music !== false,
+    sfxVolume: volume(data.sfxVolume),
+    musicVolume: volume(data.musicVolume),
+    seenIntro: data.seenIntro === true,
+    battleSpeed: data.battleSpeed === 1 || data.battleSpeed === 2 || data.battleSpeed === 3 ? data.battleSpeed : 1,
+    runSeed,
+    hpPct: typeof data.hpPct === 'number' && Number.isFinite(data.hpPct) ? Math.min(1, Math.max(0, data.hpPct)) : 1,
+  };
+}
+
 export function loadSave(): SaveData {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SAVE_KEY) : null;
     if (!raw) return defaultSave();
     const data = JSON.parse(raw) as Partial<SaveData>;
     if (data.version !== 1) return defaultSave();
-    const base = defaultSave();
-    const classId = data.classId && CLASSES.some(c => c.id === data.classId) ? data.classId : null;
-    const boons = Array.isArray(data.boons) ? data.boons.filter(id => typeof id === 'string' && ALL_BOONS.some(b => b.id === id)) : [];
-    return {
-      ...base,
-      ...data,
-      classId,
-      level: Math.min(BALANCE.hero.maxLevel, Math.max(1, Number(data.level) || 1)),
-      xp: Math.max(0, Number(data.xp) || 0),
-      stage: Math.min(25, Math.max(0, Math.floor(Number(data.stage) || 0))),
-      boons,
-      sound: data.sound !== false,
-      music: data.music !== false,
-      sfxVolume: volume(data.sfxVolume),
-      musicVolume: volume(data.musicVolume),
-      seenIntro: data.seenIntro === true,
-      battleSpeed: data.battleSpeed === 1 || data.battleSpeed === 2 || data.battleSpeed === 3 ? data.battleSpeed : 1,
-    };
+    return normalizeSave(data);
   } catch {
     return defaultSave();
   }
@@ -67,7 +81,7 @@ export function updateSave(patch: Partial<SaveData>, persist = true): void {
 }
 
 export function persistSave(): void {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* ignore */ }
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* ignore */ }
 }
 
 export function resetSave(): void {
@@ -152,12 +166,19 @@ export function takePendingReward() {
   return r;
 }
 
-export function completeStage(): { xp: number; levelUps: number; stageCleared: number } {
+export function completeStage(endHpPct = 1): { xp: number; levelUps: number; stageCleared: number } {
   const cleared = save.stage;
   const xp = stageRewardXp(cleared);
-  updateSave({ stage: Math.min(cleared + 1, 25) });
+  const hpPct = cleared % 5 === 4 ? 1 : Math.min(1, Math.max(0, endHpPct) + BALANCE.run.healOnWin);
+  updateSave({ stage: Math.min(cleared + 1, 25), hpPct });
   const levelUps = awardXp(xp);
   return { xp, levelUps, stageCleared: cleared };
+}
+
+/** Health share the next attempt at the current stage starts with, given the incoming Rally value. */
+export function startHpPct(rally: number): number {
+  const defeats = Math.max(0, Math.round((rally - 1) / BALANCE.rally.step));
+  return Math.min(1, Math.max(BALANCE.run.minStartHp, save.hpPct + defeats * BALANCE.run.retryHeal));
 }
 
 export function pickBoonChoices(count = BALANCE.boons.offered, exclude: string[] = []): BoonDef[] {
@@ -200,5 +221,5 @@ export function isVictory(): boolean {
 }
 
 export function selectClass(id: ClassId): void {
-  updateSave({ classId: id, level: 1, xp: 0, stage: 0, boons: [] });
+  updateSave({ classId: id, level: 1, xp: 0, stage: 0, boons: [], runSeed: newRunSeed(), hpPct: 1 });
 }

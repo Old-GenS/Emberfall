@@ -1,5 +1,5 @@
 import {
-  type AbilityDef, type BodyKind, type ClassId, type EnemyDef, type EnemyInstance,
+  type AbilityDef, type AffixId, type BodyKind, type ClassId, type EnemyDef, type EnemyInstance,
   type HeavyDef, type Stats, type StatusKind, classById,
 } from './data';
 import { BALANCE } from './balance';
@@ -40,6 +40,8 @@ export interface Unit {
   boss: boolean;
   scale: number;
   heavy?: HeavyDef;
+  /** The elite affix this unit rolled, if any. */
+  affix?: AffixId;
   /** Seconds until this unit's heavy may start. Infinity when it has none. */
   heavyCd: number;
   anim: { attack: number; hit: number; heal: number; spawn: number; cast: number };
@@ -122,7 +124,7 @@ function enemyStats(def: EnemyDef, hpScale: number, atkScale: number, stage: num
 
 export function makeEnemyUnit(inst: EnemyInstance, stage: number): Unit {
   const def = inst.def;
-  return baseUnit({
+  const u = baseUnit({
     side: 'enemy', name: inst.name, body: def.body, colors: def.colors,
     stats: enemyStats(def, inst.hpScale, inst.atkScale, stage),
     abilities: def.abilities,
@@ -131,7 +133,12 @@ export function makeEnemyUnit(inst: EnemyInstance, stage: number): Unit {
     scale: def.scale ?? 1,
     heavy: def.heavy,
     heavyCd: def.heavy ? def.heavy.first : Infinity,
+    affix: inst.affix,
   });
+  if (inst.affix === 'swift') u.stats.speed *= 0.75;
+  else if (inst.affix === 'armored') { u.stats.armor += 12; u.stats.damageReduction = 0.15; }
+  else if (inst.affix === 'vampiric') u.stats.lifesteal = 0.25;
+  return u;
 }
 
 export interface CombatHandlers {
@@ -444,6 +451,9 @@ export class Battle {
     // class passives
     if (u.classId === 'pyromancer') {
       this.applyStatus(target, { kind: 'burn', duration: BALANCE.combat.pyroBurnDuration, power: u.stats.atk * BALANCE.combat.pyroBurnPower }, u);
+    }
+    if (u.affix === 'burning') {
+      this.applyStatus(target, { kind: 'burn', duration: 3, power: u.stats.atk * 0.15 }, u);
     }
     this.dealDamage(u, target, u.stats.atk * power * this.atkMult(u), { crit: true, kind });
   }

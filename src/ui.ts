@@ -1,4 +1,4 @@
-import { BOONS, CLASSES, LOCATIONS, type ClassDef, type IconName, type LocationDef, TOTAL_STAGES, buildWave, classById, stageInfo } from './data';
+import { AFFIXES, BOONS, CLASSES, LOCATIONS, type ClassDef, type IconName, type LocationDef, TOTAL_STAGES, buildWave, classById, stageInfo } from './data';
 import { classPortraitSVG, locationEmblemSVG, preloadArtAssets, DESIGN_W, DESIGN_H } from './art';
 import { type SaveData, getSave, heroStats, levelLabel, xpProgress, isVictory, stageRewardXp } from './state';
 
@@ -234,8 +234,12 @@ export function renderMap(save: SaveData): string {
   const s = heroStats();
   const xp = xpProgress();
   const loc = stageInfo(Math.min(save.stage, 24)).location;
-  const wave = save.stage < TOTAL_STAGES ? buildWave(save.stage) : [];
+  const wave = save.stage < TOTAL_STAGES ? buildWave(save.stage, save.runSeed) : [];
   const bossStage = save.stage % 5 === 4;
+  const wavePreview = wave.map(w => {
+    const affix = w.affix ? AFFIXES.find(a => a.id === w.affix) : null;
+    return affix ? `<span class="affix" title="${affix.desc}">${w.name}</span>` : w.name;
+  }).join(' · ');
   return `<div class="screen">
     <div class="screen-inner">
       <div class="top-bar">
@@ -253,6 +257,8 @@ export function renderMap(save: SaveData): string {
           <h3>${cls.name.replace('The ', '')} <span class="gold" style="font-size:12px">· ${levelLabel(save.level)}</span></h3>
           <div class="lvl-line"><span>Rank <b>${save.level}</b></span><span>${xp.cur} / ${xp.need} XP</span></div>
           <div class="xp-bar"><span style="width:${(xp.pct * 100).toFixed(1)}%"></span></div>
+          <div class="hp-line"><span>Health carried</span><b>${Math.round(save.hpPct * 100)}%</b></div>
+          <div class="hp-bar map-hp-bar"><span style="width:${(save.hpPct * 100).toFixed(1)}%"></span></div>
           <div class="hero-meta">
             <div class="mini-stat"><span>Health</span><b>${Math.round(s.maxHp)}</b></div>
             <div class="mini-stat"><span>Attack</span><b>${Math.round(s.atk)}</b></div>
@@ -268,7 +274,7 @@ export function renderMap(save: SaveData): string {
         </aside>
         <div>
           <div class="realm-list">${LOCATIONS.map((l, i) => realmCard(l, i, save)).join('')}</div>
-          <div class="map-footer">Ahead: <b class="gold">${save.stage >= TOTAL_STAGES ? 'The Vale Breathes Anew' : loc.stageNames[save.stage % 5]}</b> · ${save.stage < TOTAL_STAGES ? wave.map(w => w.name).join(' · ') : 'Chronicle Complete'}</div>
+          <div class="map-footer">Ahead: <b class="gold">${save.stage >= TOTAL_STAGES ? 'The Vale Breathes Anew' : loc.stageNames[save.stage % 5]}</b> · ${save.stage < TOTAL_STAGES ? wavePreview : 'Chronicle Complete'}</div>
         </div>
       </div>
     </div>

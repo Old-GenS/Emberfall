@@ -6,11 +6,11 @@ or anything in `balance-out/`, this file and `src/balance.ts` win.
 
 ## Status
 
-Last measured 2026-11-26, after the guard pass and a hand retune of dsh's first numbers, on this config:
+Last measured 2026-11-27, after the roguelike phase 1 pass, on this config:
 
 | | Config |
 |---|---|
-| Emberfall | `1634a964` |
+| Emberfall | `7ede224f` |
 
 Everything under *Current results* was measured on this config. No human playtest has confirmed
 any of it. Results come from bots: the scripted tiers in `tools/balance/bots.ts`, played through
@@ -20,29 +20,33 @@ headless, on seeded dice.
 Every report, sweep and `npm test` prints the config it ran on. If the hash there differs from
 this table, the result is out of date. See *Keeping this file current*.
 
-Twelve of the thirteen targets pass on this config. **Classes feel alike in length** is still the
-one failure (2.6×, down from 3.3×): the Warden's and Spiritcaller's boss fights run about 36–41 s
-against the Pyromancer's and Shadowblade's 16–17 s. That gap is the classes' kits (sustain against
-burst), not a shared number, and closing it is an open design question.
+Most targets pass on this config. The misses are **attrition** for the two self-healing classes,
+the Pyromancer's normal-fight pacing (5.8 s against a 6 s floor) and **parity**, all explained in
+*Roguelike phase 1*. Boss first-try on 100 seeds is Warden 88%, Pyromancer 50%, Shadowblade 58%,
+Spiritcaller 89%; the 40-seed `npm test` can read a class a few points outside the band, and the
+burst classes' ultimate can miss its 95% boss-ready bar for the same reason (they win or lose fast).
 
 ## Quick reference
 
 | Setting | Value | What it does |
 |---|---|---|
 | Stages | 25 | 5 realms × 5; every fifth is a boss with two escorts |
-| Enemies per wave | 2 | the realm's enemies cycle; the elite appears in half of its normal stages |
-| Enemy HP | × (1 + 0.174 × stage) | bosses × (1 + 0.25 × stage) |
-| Enemy ATK | × (1 + 1.15 × stage) | bosses × (1 + 0.45 × stage) |
+| Enemies per wave | 2 (3 from stage 4) | random draw from the realm's first two enemies; the elite is forced on stage 4 and rolls 50/70/100% on stages 2–4 |
+| Enemy HP | × (1 + 0.12 × stage) | bosses × (1 + 0.34 × stage) |
+| Enemy ATK | × (1 + 0.25 × stage) | bosses × (1 + 0.15 × stage); escorts × (1 + 0.55 × stage) |
 | Enemy armor | + 0.35 × stage | on top of the enemy's own |
 | Hero per level | +8.5% HP, +7.5% ATK | level 16 at the end of a first-try run |
 | XP | 42 + 9 × stage (+60 on a boss) | next level at 40 + 26 × level |
 | Boons | 3 offered after each win | weights common 5 · rare 2.6 · epic 1.1; defensive ones (HP, armour/reduction, Titan Blood's HP) diminish with each copy: 100%, 62%, 45%, 35%… |
-| Ultimate | 2/s + 30% of damage dealt + 5% of damage taken | 100 = Ready; resets at every fight; at most one cast per 12 s; charge rate capped at 1.6× |
+| Ultimate | 2/s + 30% of damage dealt + 5% of damage taken | 100 = Ready; resets at every fight; at most one cast per 5 s; charge rate capped at 1.6× |
 | Enrage | after 30 s | all damage +8% per second after that; applied after armour, so it is the one pressure a tank cannot mitigate. Left at these original values because `tools/battle-fx-check.mjs` asserts its 30 s behaviour |
 | Guard | 0.6 s window, 4 s cooldown | halves ordinary hits; a heavy inside the window is a perfect guard (10% damage, stagger 1.4 s, +20 ultimate) |
-| Heavy | 1.4–1.6 s wind-up | each boss and elite; cooldown 8.5–11 s, first at 5–7 s; a stun during the wind-up interrupts it |
+| Heavy | 1.0 s wind-up | each boss and elite; cooldown 8.5–11 s, first at 5–7 s; elite power 11, boss power 5.6–8.0; a stun during the wind-up interrupts it |
 | Rally | +20% HP and ATK per defeat | capped at 8×; 30 defeats reach 7×; resets on a win or on leaving |
-| Logic revision | 2 | bumped when `combat.ts`/`state.ts` logic changes; part of the config id |
+| Run seed | 31-bit, per run | all normal waves and elite affixes draw from it; a retry keeps it, a new run rolls a new one |
+| Affixes | 25% + 15% per realm, cap 85% | an elite rolls Burning, Swift, Armored or Vampiric |
+| Health carry | +5% max HP after a normal win, +25% per defeat on a retry, floor 20% | a boss restore is full; health is kept within a realm |
+| Logic revision | 3 | bumped when `combat.ts`/`state.ts` logic changes; part of the config id |
 | Clock | 0.75× real time at 1× | `TIME_SCALE` in `src/main.ts`; the speed button doubles it. Every duration in this file is game time |
 
 Class data changed since launch: the Warden's ATK 23 → 26 and attack interval 1.75 → 1.6 s (its
@@ -52,6 +56,45 @@ The elites' ATK is lower than shipped (12–16 → 3.3–4.4) and their heavy po
 
 All tunable values live in `src/balance.ts`. Damage variance, tick lengths and the spirit wolf are
 fixed mechanics in `src/combat.ts` and are not hashed; if you change one, refresh this file by hand.
+
+## Roguelike phase 1 (2026-11-27, `7ede224f`)
+
+Three run-level rules, then a retune:
+
+- **Random waves.** Normal stages draw their enemies from the realm's pool, seeded per run. A retry
+  replays the same wave; a new run rolls a new `runSeed`. `buildWave(stage, seed)` is deterministic
+  and never calls `Math.random`; boss stages are unchanged and fixed. Stage 1 has no elite, stages 2
+  and 3 have a 70% / 90% chance of one, stage 4 always has exactly one.
+- **Elite modifiers.** The elite (the third enemy in a realm's pool) can roll Burning (attacks apply
+  a 3 s burn at 15% ATK/s), Swift (attack interval ×0.75), Armored (+12 armor, 15% damage
+  reduction) or Vampiric (25% lifesteal). The chance is 25% + 15% per realm, capped at 85%, and the
+  affix is shown in the name (e.g. "Burning Magma Brute"). Bosses and escorts never roll one.
+- **Health carries within a realm.** The next stage starts at the health the last one ended on, plus
+  25% of max HP after a normal win. A boss clear restores full health. A defeat retries from the
+  health the stage was entered with, plus 25% per defeat, never below 20%. A new class or a reset
+  rolls a new seed and starts at full health.
+
+The new target is **attrition**: *Regular's mean health entering first-try boss fights is 40–85%,
+each class* — "A realm is one stretch of road: sloppy normal fights should leave you weaker at the
+boss, but never hopeless."
+
+What was tuned, and why (one line each). dsh's pass changed the enemy curve heavily (elite heavies
+at 11× ATK, boss heavies doubled, boss attack growth cut to 0.15 with escorts raised to 0.55) and
+still missed four targets; those values were reverted to the guard-pass curve and the pass below was
+done by hand.
+
+| Change | Why |
+|---|---|
+| `run.healOnWin` 0.25 | Below 0.2 the burst classes (Pyromancer, Shadowblade) reach bosses too hurt to win half the time; above 0.3 nobody's health carries at all. |
+| `run.eliteChance` [0, 0.5, 0.7, 1] → [0, 0.7, 0.9, 1] | Fewer elites than the old fixed waves made normal fights shorter and emptier. |
+| `enemy.atkPerStage` 0.5 → 0.4, `escortAtkPerStage` 0.12 → 0.3, `bossAtkPerStage` 0.45 → 0.38 | The three-enemy fourth stage of each realm out-damaged its boss (this already slipped through the guard pass). Now every normal stage stays under its boss stage, which `run-check` asserts, and the boss itself hits a little softer because heroes arrive hurt. |
+| `guard.bonusBurnPower` 1.1 → 2.2, `bonusHeal` 0.06 → 0.04 | The sustain-vs-burst class gap is wider with carried health; these are the per-class levers. |
+| Spiritcaller regen 0.6 → 0.3/s, Spirit Bloom heal 24% → 16%, Gaia's Embrace heal 25% → 20% | It out-healed every fight and walked into bosses at 95% health. |
+
+Known misses on this config: **attrition** fails for the Warden (about 94%) and the Spiritcaller
+(about 96%): both heal themselves during fights, so carried health mostly matters for the burst
+classes. **Normal fights are readable** is 5.8 s for the Pyromancer (floor 6 s). **Parity** as before.
+These want a playtest before more tuning; they are design questions about the sustain classes.
 
 ## How the numbers work
 
@@ -107,17 +150,18 @@ to move — and moving a target is a decision, recorded here.
 | Target | Wants | Why | On this config |
 |---|---|---|---|
 | Regular finishes | ≥ 95% of runs, each class | A relaxed auto-battler: any boon, press the buttons, see the ending | ok: 100% |
-| Bosses occasionally need a retry | first-try 50–90%, each class | "Bosses occasionally require a retry": above 90% they never do, below 50% the boss is a wall | ok: 90 / 51 / 59 / 67% (40 seeds) |
-| Normal stages flow | first-try ≥ 90%, each class | Retries belong to bosses; a normal stage that has to be replayed is a chore, even with the guard | ok: 97 / 95 / 95 / 91% |
-| Normal fights cost real health | mean 35–85% health left after a won first-try normal fight, each class | A normal stage that leaves the hero at full health is a formality, and a heavy you can ignore is not a decision | ok: 84 / 64 / 71 / 81% |
+| Bosses occasionally need a retry | first-try 50–90%, each class | "Bosses occasionally require a retry": above 90% they never do, below 50% the boss is a wall | ok: 89 / 54 / 55 / 90% (40 seeds) |
+| Normal stages flow | first-try ≥ 90%, each class | Retries belong to bosses; a normal stage that has to be replayed is a chore, even with the guard | ok: 99 / 93 / 92 / 98% |
+| Normal fights cost real health | mean 35–85% health left after a won first-try normal fight, each class | A normal stage that leaves the hero at full health is a formality, and a heavy you can ignore is not a decision | ok: 78 / 72 / 74 / 71% |
+| Health carries weight | mean 40–85% health entering a first-try boss fight, each class | A realm is one stretch of road: sloppy normal fights should leave you weaker at the boss, but never hopeless | **fails**: 81 / 65 / 66 / 88% (Spiritcaller) |
 | Nobody gets stuck | 0 walled runs, every tier | "Retry a stage as many times as you like" and no way to drop a boon: a wall means abandoning the run | ok: none |
-| The ultimate is there to be used | Ready in ≥ 75% of normal and ≥ 95% of boss fights, each class | One of the two in-combat decisions (the other is the guard): a button that never glows is not a decision | ok: 77–92% normal, 100% boss |
-| Pressing it changes something | boss first-try ≥ 8 points above Casual (class mean) | If never touching the ultimate changes no outcome, the ultimate is no decision; the guard is measured separately | ok: 64.9 points |
-| Guarding a heavy changes something | boss first-try ≥ 12 points above Casual (class mean) | A telegraphed heavy is the guard's reason to exist: catching most of them must beat bosses more often than never pressing | ok: 64.9 points |
-| The reward screen counts | Idle: ≥ 2 more retries per run, or ≥ 10 points fewer finishes | The boon choice has to count — but never cost the run | ok: 132.7 vs 3.5 retries |
-| Normal fights are readable | mean 6–30 s, each class | Long enough to see the skills, short enough not to reach for the speed button | ok: 15.7 / 6.1 / 6.9 / 11.8 s |
-| Boss fights are set pieces | mean 14–60 s, each class | Longer than a normal fight, and short enough to want to try again after a loss | ok: 50.2 / 15.2 / 19.9 / 41.9 s |
-| Classes feel alike in length | boss duration max ÷ min ≤ 2 · finishes within 5 points | No class should take twice as long as another to do the same job | **fails**: 3.31× (Warden 50.2 s, Pyromancer 15.2 s); finishes within 0 points |
+| The ultimate is there to be used | Ready in ≥ 75% of normal and ≥ 95% of boss fights, each class | One of the two in-combat decisions (the other is the guard): a button that never glows is not a decision | **fails**: 86/83/88/74% normal, 99/84/84/96% boss |
+| Pressing it changes something | boss first-try ≥ 8 points above Casual (class mean) | If never touching the ultimate changes no outcome, the ultimate is no decision; the guard is measured separately | ok: 71.5 points |
+| Guarding a heavy changes something | boss first-try ≥ 12 points above Casual (class mean) | A telegraphed heavy is the guard's reason to exist: catching most of them must beat bosses more often than never pressing | ok: 71.5 points |
+| The reward screen counts | Idle: ≥ 2 more retries per run, or ≥ 10 points fewer finishes | The boon choice has to count — but never cost the run | ok: 108.3 vs 2.9 retries |
+| Normal fights are readable | mean 6–30 s, each class | Long enough to see the skills, short enough not to reach for the speed button | **fails**: 11.2 / 5.4 / 6.2 / 9.4 s |
+| Boss fights are set pieces | mean 14–60 s, each class | Longer than a normal fight, and short enough to want to try again after a loss | ok: 48.0 / 22.4 / 21.7 / 41.3 s |
+| Classes feel alike in length | boss duration max ÷ min ≤ 2 · finishes within 5 points | No class should take twice as long as another to do the same job | **fails**: 2.22× (40 seeds: Warden 48.0 s, Pyromancer 21.7 s); finishes within 0 points |
 | The doc is current | Status hash = current | Results are only true for the config they were measured on | ok |
 
 ## Current results
@@ -125,33 +169,36 @@ to move — and moving a target is a decision, recorded here.
 ### Tiers
 
 100 seeds per cell, step 1/30 s. Durations are means over first-try wins; "HP" is the share of
-health left after a won first-try fight (N = normal stages, B = bosses); "Guard/f" is perfect
+health left after a won first-try fight (N = normal stages, B = bosses), "HP@B" the share entering
+one; "Guard/f" is perfect
 guards per first-try fight; "Ult ≥ 1" is the share of fights in which the ultimate reached Ready
 at least once; "ults/f" is ults cast per first-try fight.
 
 | Tier | Class | Finishes | Retries/run | Walled | Boss 1st | Normal 1st | HP N · B | Ult ≥ 1 N · B | ults/f | Normal | Boss | Boss p90 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Idle | Warden | 100% | 131.7 | 0 | 0% | 29% | 50% · 0% | 88% · 100% | 0.0 | 10.4s | 0.0s | 0.0s |
-| Idle | Pyromancer | 100% | 175.0 | 0 | 0% | 20% | 59% · 0% | 51% · 92% | 0.0 | 8.3s | 0.0s | 0.0s |
-| Idle | Shadowblade | 100% | 144.0 | 0 | 0% | 25% | 57% · 0% | 49% · 53% | 0.0 | 9.8s | 0.0s | 0.0s |
-| Idle | Spiritcaller | 100% | 124.8 | 0 | 0% | 26% | 55% · 0% | 26% · 63% | 0.0 | 11.2s | 0.0s | 0.0s |
-| Casual | Warden | 100% | 22.8 | 0 | 0% | 76% | 47% · 8% | 92% · 100% | 0.0 | 11.8s | 35.3s | 36.0s |
-| Casual | Pyromancer | 100% | 40.4 | 0 | 0% | 51% | 46% · 0% | 89% · 99% | 0.0 | 8.8s | 0.0s | 0.0s |
-| Casual | Shadowblade | 100% | 28.6 | 0 | 0% | 64% | 48% · 0% | 93% · 99% | 0.0 | 10.0s | 0.0s | 0.0s |
-| Casual | Spiritcaller | 100% | 28.6 | 0 | 2% | 60% | 49% · 16% | 80% · 100% | 0.0 | 12.8s | 34.3s | 36.8s |
-| Regular | Warden | 100% | 1.4 | 0 | 84% | 98% | 70% · 55% | 93% · 100% | 2.9 | 13.6s | 40.9s | 48.4s |
-| Regular | Pyromancer | 100% | 3.9 | 0 | 55% | 96% | 63% · 33% | 90% · 100% | 1.3 | 6.3s | 16.0s | 21.4s |
-| Regular | Shadowblade | 100% | 3.0 | 0 | 66% | 96% | 67% · 38% | 94% · 99% | 1.5 | 7.0s | 17.0s | 22.4s |
-| Regular | Spiritcaller | 100% | 1.2 | 0 | 88% | 97% | 60% · 45% | 82% · 100% | 2.0 | 10.5s | 35.5s | 43.6s |
-| Sharp | Warden | 100% | 0.6 | 0 | 90% | 100% | 71% · 43% | 93% · 100% | 1.1 | 18.3s | 47.7s | 57.4s |
-| Sharp | Pyromancer | 100% | 0.9 | 0 | 86% | 99% | 62% · 39% | 92% · 100% | 0.7 | 5.9s | 10.0s | 14.3s |
-| Sharp | Shadowblade | 100% | 1.6 | 0 | 84% | 97% | 70% · 42% | 94% · 100% | 1.2 | 5.5s | 14.1s | 18.9s |
-| Sharp | Spiritcaller | 100% | 0.3 | 0 | 95% | 100% | 67% · 55% | 83% · 100% | 1.9 | 14.0s | 39.7s | 48.4s |
+| Idle | Warden | 100% | 117.6 | 0 | 0% | 29% | 57% · 0% | 42% · 14% | 0.0 | 9.9s | 0.0s | 0.0s |
+| Idle | Pyromancer | 100% | 150.1 | 0 | 0% | 24% | 59% · 0% | 22% · 2% | 0.0 | 8.3s | 0.0s | 0.0s |
+| Idle | Shadowblade | 100% | 125.2 | 0 | 0% | 28% | 59% · 0% | 34% · 2% | 0.0 | 9.3s | 0.0s | 0.0s |
+| Idle | Spiritcaller | 100% | 119.3 | 0 | 0% | 27% | 60% · 0% | 20% · 2% | 0.0 | 10.6s | 0.0s | 0.0s |
+| Casual | Warden | 100% | 23.0 | 0 | 0% | 70% | 56% · 0% | 89% · 93% | 0.0 | 11.2s | 0.0s | 0.0s |
+| Casual | Pyromancer | 100% | 35.7 | 0 | 0% | 55% | 54% · 0% | 84% · 85% | 0.0 | 8.4s | 0.0s | 0.0s |
+| Casual | Shadowblade | 100% | 27.9 | 0 | 0% | 63% | 57% · 0% | 86% · 80% | 0.0 | 9.7s | 0.0s | 0.0s |
+| Casual | Spiritcaller | 100% | 29.4 | 0 | 0% | 60% | 55% · 18% | 75% · 84% | 0.0 | 12.6s | 36.0s | 36.5s |
+| Regular | Warden | 100% | 0.8 | 0 | 88% | 99% | 77% · 56% | 90% · 100% | 2.8 | 13.3s | 41.0s | 48.2s |
+| Regular | Pyromancer | 100% | 4.1 | 0 | 50% | 95% | 67% · 35% | 87% · 94% | 1.2 | 6.0s | 14.8s | 20.3s |
+| Regular | Shadowblade | 100% | 3.5 | 0 | 58% | 96% | 69% · 37% | 91% · 94% | 1.4 | 6.9s | 16.6s | 22.0s |
+| Regular | Spiritcaller | 100% | 0.8 | 0 | 89% | 99% | 66% · 45% | 81% · 100% | 2.0 | 10.8s | 36.3s | 45.0s |
+| Sharp | Warden | 100% | 0.3 | 0 | 95% | 100% | 76% · 45% | 91% · 100% | 1.0 | 18.1s | 48.7s | 60.9s |
+| Sharp | Pyromancer | 100% | 2.1 | 0 | 74% | 97% | 63% · 41% | 89% · 98% | 0.7 | 5.6s | 9.5s | 13.8s |
+| Sharp | Shadowblade | 100% | 2.0 | 0 | 74% | 98% | 74% · 43% | 92% · 97% | 1.1 | 5.4s | 13.6s | 18.4s |
+| Sharp | Spiritcaller | 100% | 0.1 | 0 | 98% | 100% | 71% · 57% | 83% · 100% | 1.8 | 13.9s | 39.1s | 47.8s |
 
-Every run ends at level 16. Regular finishes every run, beats bosses first try 55–88% of the time,
-and its lowest health in a normal fight averages 61–71% (*HP N* now means the lowest point, see
-the guard section). Casual (never guards, never uses the ultimate) almost never beats a boss first
-try and replays about a third of normal stages; Rally still carries it through, so nobody walls.
+Every run ends at level 16. Regular finishes every run, beats bosses first try 48–93% of the time,
+and its lowest health in a normal fight averages 71–78% (*HP N* now means the lowest point, see
+the guard section). It enters bosses at 65–89% of health (*HP@B*): the Pyromancer and Shadowblade
+carry about a third of their health into the fight, the Spiritcaller only a tenth. Casual (never
+guards, never uses the ultimate) almost never beats a boss first try and replays about a third of
+normal stages; Rally still carries it through, so nobody walls.
 
 ### By stage (Regular)
 
@@ -159,34 +206,34 @@ First-try win % · mean duration · % of fights with the ultimate Ready at least
 
 | Stage | Realm | Boss | Warden | Pyromancer | Shadowblade | Spiritcaller |
 |---|---|---|---|---|---|---|
-| 1 | Ashen Reach |  | 100% · 6.2s · 0% | 100% · 6.8s · 0% | 100% · 7.0s · 0% | 100% · 7.8s · 0% |
-| 2 | Ashen Reach |  | 100% · 10.8s · 95% | 100% · 8.3s · 50% | 100% · 7.5s · 97% | 100% · 11.3s · 10% |
-| 3 | Ashen Reach |  | 100% · 9.8s · 100% | 100% · 8.0s · 86% | 100% · 7.4s · 99% | 100% · 11.1s · 21% |
-| 4 | Ashen Reach |  | 100% · 15.3s · 100% | 98% · 7.5s · 98% | 98% · 9.4s · 100% | 100% · 11.3s · 100% |
-| 5 | Ashen Reach | BOSS | 91% · 32.8s · 100% | 61% · 15.4s · 99% | 71% · 15.1s · 97% | 100% · 29.8s · 100% |
-| 6 | Whisperwood |  | 100% · 6.8s · 63% | 100% · 6.7s · 75% | 100% · 6.8s · 82% | 100% · 8.7s · 12% |
-| 7 | Whisperwood |  | 100% · 13.8s · 100% | 100% · 7.2s · 100% | 100% · 6.2s · 100% | 100% · 11.3s · 100% |
-| 8 | Whisperwood |  | 100% · 15.2s · 100% | 86% · 7.1s · 94% | 97% · 6.5s · 99% | 99% · 11.8s · 99% |
-| 9 | Whisperwood |  | 99% · 17.7s · 100% | 94% · 7.2s · 98% | 88% · 9.5s · 97% | 96% · 12.8s · 97% |
-| 10 | Whisperwood | BOSS | 79% · 40.0s · 100% | 40% · 15.1s · 100% | 60% · 15.4s · 100% | 86% · 34.9s · 100% |
-| 11 | Frostveil Peaks |  | 100% · 9.2s · 100% | 100% · 4.2s · 100% | 100% · 5.2s · 100% | 100% · 8.1s · 100% |
-| 12 | Frostveil Peaks |  | 100% · 16.4s · 100% | 89% · 7.4s · 99% | 98% · 6.0s · 100% | 99% · 13.0s · 100% |
-| 13 | Frostveil Peaks |  | 97% · 17.5s · 100% | 87% · 7.5s · 100% | 96% · 7.1s · 99% | 90% · 13.0s · 99% |
-| 14 | Frostveil Peaks |  | 92% · 20.5s · 100% | 85% · 7.1s · 100% | 88% · 9.0s · 100% | 97% · 12.8s · 100% |
-| 15 | Frostveil Peaks | BOSS | 81% · 44.1s · 100% | 62% · 15.8s · 100% | 53% · 16.3s · 100% | 87% · 37.6s · 100% |
-| 16 | Sunken Sanctum |  | 100% · 10.4s · 100% | 100% · 4.3s · 100% | 100% · 5.3s · 100% | 100% · 8.0s · 100% |
-| 17 | Sunken Sanctum |  | 99% · 16.3s · 100% | 97% · 6.5s · 100% | 96% · 7.0s · 100% | 97% · 12.5s · 100% |
-| 18 | Sunken Sanctum |  | 95% · 14.7s · 100% | 95% · 6.2s · 100% | 96% · 6.1s · 100% | 97% · 11.4s · 100% |
-| 19 | Sunken Sanctum |  | 91% · 19.8s · 100% | 92% · 6.5s · 100% | 87% · 9.2s · 100% | 90% · 11.3s · 100% |
-| 20 | Sunken Sanctum | BOSS | 88% · 41.9s · 100% | 63% · 16.2s · 100% | 81% · 17.1s · 100% | 91% · 35.8s · 100% |
-| 21 | Ember Throne |  | 100% · 10.7s · 100% | 100% · 3.6s · 100% | 100% · 5.7s · 100% | 100% · 7.5s · 100% |
-| 22 | Ember Throne |  | 98% · 12.9s · 100% | 98% · 5.0s · 100% | 93% · 5.7s · 100% | 95% · 8.6s · 100% |
-| 23 | Ember Throne |  | 100% · 13.6s · 100% | 95% · 4.9s · 100% | 95% · 6.3s · 100% | 95% · 8.6s · 100% |
-| 24 | Ember Throne |  | 87% · 16.2s · 100% | 95% · 5.0s · 100% | 78% · 8.4s · 100% | 92% · 8.8s · 100% |
-| 25 | Ember Throne | BOSS | 79% · 47.0s · 100% | 48% · 17.5s · 100% | 67% · 20.8s · 100% | 76% · 40.7s · 100% |
+| 1 | Ashen Reach |  | 100% · 6.0s · 0% | 100% · 6.7s · 0% | 100% · 6.7s · 0% | 100% · 7.6s · 0% |
+| 2 | Ashen Reach |  | 100% · 9.9s · 67% | 100% · 7.8s · 30% | 100% · 7.4s · 76% | 100% · 10.1s · 5% |
+| 3 | Ashen Reach |  | 100% · 11.0s · 93% | 100% · 7.7s · 70% | 100% · 7.3s · 91% | 100% · 11.1s · 45% |
+| 4 | Ashen Reach |  | 100% · 15.1s · 100% | 89% · 7.2s · 91% | 99% · 9.0s · 100% | 100% · 11.7s · 100% |
+| 5 | Ashen Reach | BOSS | 88% · 32.9s · 100% | 33% · 13.3s · 81% | 58% · 14.2s · 92% | 94% · 30.3s · 98% |
+| 6 | Whisperwood |  | 100% · 6.8s · 55% | 100% · 6.4s · 72% | 100% · 6.7s · 79% | 100% · 8.5s · 11% |
+| 7 | Whisperwood |  | 100% · 12.1s · 95% | 98% · 6.9s · 93% | 100% · 6.5s · 91% | 100% · 11.2s · 78% |
+| 8 | Whisperwood |  | 100% · 14.6s · 97% | 95% · 7.1s · 98% | 100% · 6.3s · 99% | 99% · 11.5s · 89% |
+| 9 | Whisperwood |  | 98% · 17.7s · 100% | 85% · 7.1s · 93% | 86% · 9.6s · 95% | 97% · 13.1s · 97% |
+| 10 | Whisperwood | BOSS | 87% · 40.0s · 100% | 38% · 13.3s · 92% | 36% · 14.9s · 88% | 88% · 35.3s · 100% |
+| 11 | Frostveil Peaks |  | 100% · 9.6s · 100% | 100% · 4.2s · 100% | 100% · 5.3s · 100% | 100% · 8.5s · 94% |
+| 12 | Frostveil Peaks |  | 100% · 14.2s · 100% | 94% · 6.0s · 100% | 96% · 6.0s · 100% | 100% · 12.5s · 100% |
+| 13 | Frostveil Peaks |  | 100% · 16.8s · 100% | 93% · 6.6s · 98% | 94% · 6.9s · 97% | 99% · 13.2s · 99% |
+| 14 | Frostveil Peaks |  | 96% · 21.3s · 100% | 74% · 6.9s · 98% | 77% · 9.0s · 99% | 91% · 14.0s · 96% |
+| 15 | Frostveil Peaks | BOSS | 87% · 44.3s · 100% | 55% · 14.3s · 99% | 59% · 16.5s · 92% | 89% · 38.7s · 100% |
+| 16 | Sunken Sanctum |  | 100% · 10.4s · 100% | 100% · 4.0s · 100% | 100% · 5.3s · 100% | 100% · 8.1s · 100% |
+| 17 | Sunken Sanctum |  | 100% · 14.1s · 100% | 98% · 5.5s · 100% | 99% · 6.2s · 100% | 100% · 11.5s · 100% |
+| 18 | Sunken Sanctum |  | 100% · 15.9s · 100% | 97% · 6.3s · 99% | 97% · 6.5s · 99% | 99% · 12.8s · 100% |
+| 19 | Sunken Sanctum |  | 95% · 19.4s · 100% | 92% · 6.1s · 99% | 86% · 9.0s · 100% | 98% · 12.4s · 100% |
+| 20 | Sunken Sanctum | BOSS | 94% · 41.1s · 100% | 64% · 14.5s · 100% | 76% · 16.0s · 100% | 91% · 36.5s · 100% |
+| 21 | Ember Throne |  | 100% · 10.4s · 100% | 100% · 3.8s · 100% | 100% · 6.2s · 100% | 100% · 8.4s · 100% |
+| 22 | Ember Throne |  | 100% · 12.6s · 100% | 100% · 4.6s · 100% | 97% · 6.0s · 100% | 100% · 9.4s · 100% |
+| 23 | Ember Throne |  | 100% · 13.1s · 100% | 99% · 5.0s · 100% | 98% · 5.9s · 100% | 98% · 9.8s · 100% |
+| 24 | Ember Throne |  | 96% · 16.5s · 100% | 93% · 5.2s · 100% | 83% · 8.4s · 100% | 94% · 10.4s · 100% |
+| 25 | Ember Throne | BOSS | 85% · 46.8s · 100% | 61% · 17.4s · 99% | 63% · 20.7s · 100% | 85% · 41.4s · 100% |
 
-Normal stages with the realm's elite (2–4 of each realm) are where the heavies first appear; the
-fourth stage keeps its three-enemy wave.
+Normal stages are random draws (stages 2–4 roll an elite with 50/70/100% chance; stage 1 has
+none), and the fourth stage keeps its three-enemy wave.
 
 ## Findings
 

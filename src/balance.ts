@@ -14,14 +14,14 @@ export const BALANCE = {
    * (src/combat.ts, src/state.ts, the battle flow in src/main.ts). The doc's config id covers logic
    * as well as numbers, so a logic fix still marks docs/balance.md as out of date.
    */
-  logic: 2,
+  logic: 3,
   /** Enemy waves. `stage` runs 0..24; five stages per realm, the fifth is the boss. */
   enemy: {
     hpPerStage: 0.155,                       // normal enemies: HP × (1 + stage × this)
     bossHpPerStage: 0.24,                    // bosses: HP × (1 + stage × this)
-    atkPerStage: 0.5,                     // normal enemies: ATK × (1 + stage × this)
-    bossAtkPerStage: 0.45,                    // bosses: ATK × (1 + stage × this)
-    escortAtkPerStage: 0.12,                 // the enemies that accompany a boss
+    atkPerStage: 0.4,                     // normal enemies: ATK × (1 + stage × this)
+    bossAtkPerStage: 0.38,                    // bosses: ATK × (1 + stage × this)
+    escortAtkPerStage: 0.3,                 // the enemies that accompany a boss
     escortHp: 0.8, escortHpStep: 0.08,       // escorts: HP × (this + index × step)
     waveHp: 0.94, waveHpStep: 0.05,          // a normal wave: HP × (this + index × step)
     armorPerStage: 0.35,                     // every enemy: armor + stage × this
@@ -54,9 +54,9 @@ export const BALANCE = {
     perfectUlt: 20,     // ultimate charge for a perfect guard
     stagger: 1.4,       // stun on the attacker after a perfect guard (NOT reduced by bossStunFactor)
     bonusShield: 0.04,    // warden: shield of maxHp × this
-    bonusHeal: 0.06,    // spiritcaller: heal maxHp × this
+    bonusHeal: 0.04,    // spiritcaller: heal maxHp × this
     bonusCounter: 3,  // shadowblade: counter-hit of atk × this, forced crit
-    bonusBurnDuration: 4, bonusBurnPower: 1.1, // pyromancer: burn of atk × power per second
+    bonusBurnDuration: 4, bonusBurnPower: 2.2, // pyromancer: burn of atk × power per second
   },
   combat: {
     enrageAt: 30, enrageRamp: 0.12,          // after this many seconds, all damage grows by ramp per second
@@ -67,6 +67,14 @@ export const BALANCE = {
   },
   /** The mercy buff after a defeat (src/main.ts): HP and ATK × rally on the next try, +step per defeat. 30 defeats reach 7x. */
   rally: { step: 0.2, cap: 8 },
+  /** Roguelike run rules: random waves, elite affixes, health carried within a realm. */
+  run: {
+    eliteChance: [0, 0.7, 0.9, 1],   // by stageInLoc 0..3: chance the wave contains the realm's elite (at most one)
+    affixChance: 0.25, affixPerRealm: 0.15, affixCap: 0.85, // chance an elite rolls an affix: base + realm index × per, capped
+    healOnWin: 0.25,                  // share of max HP restored after a normal win (on top of the HP left)
+    retryHeal: 0.25,                  // extra share of max HP per defeat on the retry's starting health
+    minStartHp: 0.2,                  // the hero never starts a stage below this share of max HP
+  },
 };
 
 export type Balance = typeof BALANCE;

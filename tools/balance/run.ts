@@ -9,7 +9,7 @@
 import { CLASSES, TOTAL_STAGES, buildWave, type ClassId } from '../../src/data';
 import { Battle } from '../../src/combat';
 import { BALANCE } from '../../src/balance';
-import { applyBoon, completeStage, getSave, heroStats, pickBoonChoices, resetSave, selectClass } from '../../src/state';
+import { applyBoon, completeStage, getSave, heroStats, pickBoonChoices, resetSave, selectClass, startHpPct as startHpShare } from '../../src/state';
 import { TIERS, chooseBoon, wantsUlt, type BoonPolicy, type GuardPolicy, type Tier, type UltPolicy } from './bots';
 import { hashSeed, seedRandom } from './rng';
 
@@ -30,6 +30,9 @@ export interface FightRec {
   maxCharge: number;
   /** Hero health / max health at the end of the fight; 0 on a loss. */
   hpLeftPct: number;
+  /** Health share the fight started with, and the share it ended on (0 on a loss). */
+  startHpPct: number;
+  endHpPct: number;
   /** Perfect guards landed, and heavy attacks that hit the hero unguarded. */
   perfect: number;
   heavyTaken: number;
@@ -55,7 +58,9 @@ export function fight(classId: ClassId, stage: number, rally: number, ult: UltPo
     stats.maxHp = Math.round(stats.maxHp * rally);
     stats.atk = Math.round(stats.atk * rally * 10) / 10;
   }
-  const b = new Battle(classId, stats, buildWave(stage), stage);
+  const b = new Battle(classId, stats, buildWave(stage, getSave().runSeed), stage);
+  b.hero.hp = Math.max(1, Math.round(b.hero.stats.maxHp * startHpShare(rally)));
+  const startHpPct = 100 * (b.hero.hp / b.hero.stats.maxHp);
   let ults = 0;
   let ultReady = false;
   let maxCharge = 0;
@@ -88,6 +93,8 @@ export function fight(classId: ClassId, stage: number, rally: number, ult: UltPo
   return {
     stage, boss: stage % 5 === 4, attempt: 0, win: b.victory, dur: b.time, ults, ultReady, maxCharge,
     hpLeftPct: b.victory && b.hero.alive ? 100 * lowHp : 0, // lowest health during a won fight
+    startHpPct,
+    endHpPct: b.victory && b.hero.alive ? 100 * (b.hero.hp / b.hero.stats.maxHp) : 0,
     perfect: b.guardStats.perfect, heavyTaken: b.guardStats.heavyTaken,
   };
 }
@@ -113,7 +120,7 @@ export function playRun(classId: ClassId, tier: Tier, seed: number, maxRetries =
       fights.push(rec);
     }
     if (!rec.win) { walled = true; break; }
-    completeStage();
+    completeStage(rec.endHpPct / 100);
     takeBoon(tier.boons, classId);
     rally = 1;
   }
@@ -164,6 +171,8 @@ export interface ClassMetrics {
   /** Mean share of health left after a won first-try normal / boss fight. */
   hpLeftNormalPct: number;
   hpLeftBossPct: number;
+  /** Mean health share entering a first-try boss fight. */
+  bossEntryHpPct: number;
   /** Perfect guards and unguarded heavies per first-try fight. */
   perfectPerFight: number;
   heavyTakenPerFight: number;
@@ -195,6 +204,7 @@ export function summarize(tier: string, classId: ClassId, runs: RunResult[]): Cl
     bossDurP90: quantile(bossWinDur, 0.9),
     hpLeftNormalPct: mean(normal.filter(win1).map((f) => f.hpLeftPct)),
     hpLeftBossPct: mean(bossWin.map((f) => f.hpLeftPct)),
+    bossEntryHpPct: mean(boss.map((f) => f.startHpPct)),
     perfectPerFight: mean(first.map((f) => f.perfect)),
     heavyTakenPerFight: mean(first.map((f) => f.heavyTaken)),
     meanLevel: mean(runs.map((r) => r.finalLevel)),

@@ -9,7 +9,7 @@ import { RealmEvents } from './realm-events';
 import { audio, type ThemeId } from './audio';
 import {
   applyBoon, completeStage, getSave, hasHero, heroStats, isVictory, loadSave,
-  pickBoonChoices, resetSave, selectClass, updateSave, xpProgress,
+  pickBoonChoices, resetSave, selectClass, startHpPct, updateSave, xpProgress,
 } from './state';
 import {
   howToHTML, icon, renderBattle, renderClassSelect, renderMap, renderReward,
@@ -228,7 +228,7 @@ function startBattle(keepRally = false): void {
   stopBattle();
   const cls = classById(save.classId);
   const info = stageInfo(save.stage);
-  const wave = buildWave(save.stage);
+  const wave = buildWave(save.stage, save.runSeed);
   screen = 'battle';
   render(renderBattle({ save, cls, stage: save.stage, stats: heroStats() }));
   document.body.classList.add('in-battle');
@@ -241,6 +241,7 @@ function startBattle(keepRally = false): void {
   const stats = heroStats();
   if (rally > 1) { stats.maxHp = Math.round(stats.maxHp * rally); stats.atk = Math.round(stats.atk * rally * 10) / 10; }
   battle = new Battle(cls.id, stats, wave, save.stage, { onEvent: handleEvent });
+  battle.hero.hp = Math.max(1, Math.round(battle.hero.stats.maxHp * startHpPct(rally)));
   renderer.setBattle(battle);
   realmEvents = new RealmEvents(info.location.particle, info.location.palette.accent);
   renderer.setRealmEvents(realmEvents);
@@ -442,7 +443,7 @@ function handleBattleEnd(victory: boolean): void {
   const save = getSave();
   if (victory) {
     const final = save.stage === TOTAL_STAGES - 1;
-    const res = completeStage();
+    const res = completeStage(battle.hero.hp / battle.hero.stats.maxHp);
     pendingResult = { xp: res.xp, levelUps: res.levelUps, final, stage: res.stageCleared };
     rally = 1;
     audio.sfx('victory');
@@ -475,6 +476,9 @@ function showResultOverlay(): void {
           <span class="reward-chip">${icon('star')} <b>+${res?.xp ?? 0} XP</b></span>
           ${res?.levelUps ? `<span class="reward-chip">${icon('bolt')} <b>Level ${getSave().level}</b></span>` : ''}
           ${res?.final ? '' : `<span class="reward-chip">${icon('crown')} <b>Boon earned</b></span>`}
+          ${(res?.stage ?? -1) % 5 === 4
+            ? `<span class="reward-chip">${icon('heart')} <b>Fully restored</b></span>`
+            : `<span class="reward-chip">${icon('heart')} <b>Health ${Math.round(getSave().hpPct * 100)}% (+${Math.round(BALANCE.run.healOnWin * 100)}%)</b></span>`}
         </div>
         <div class="result-actions">
           <button class="btn primary" data-result="spoils">${res?.final ? 'See the Ending' : 'Claim Your Boon'}</button>
@@ -488,7 +492,10 @@ function showResultOverlay(): void {
         <div class="r-kicker">The Spark Fades</div>
         <h2>Defeated</h2>
         <p>Your legend is not finished. The stage will be exactly as you left it — only your pride is wounded.</p>
-        ${rally > 1 ? `<div class="result-rewards"><span class="reward-chip rally">${icon('bolt')} <b>Rally +${Math.round((rally - 1) * 100)}%</b> health &amp; attack next try</span></div>` : ''}
+        <div class="result-rewards">
+          ${rally > 1 ? `<span class="reward-chip rally">${icon('bolt')} <b>Rally +${Math.round((rally - 1) * 100)}%</b> health &amp; attack next try</span>` : ''}
+          <span class="reward-chip">${icon('heart')} <b>Next try starts at ${Math.round(startHpPct(rally) * 100)}% health</b></span>
+        </div>
         <div class="result-actions">
           <button class="btn primary" data-result="retry">Try Again</button>
           <button class="btn ghost" data-result="map">Return to Map</button>

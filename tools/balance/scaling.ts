@@ -48,7 +48,7 @@ export interface StageRow {
 export function stageRows(): StageRow[] {
   const rows: StageRow[] = [];
   for (let stage = 0; stage < TOTAL_STAGES; stage++) {
-    const units = buildWave(stage).map((inst) => makeEnemyUnit(inst, stage));
+    const units = buildWave(stage, 1).map((inst) => makeEnemyUnit(inst, stage));
     const level = levelAtStage(stage);
     const enemyHp = units.reduce((n, u) => n + u.stats.maxHp, 0);
     const enemyAtk = units.reduce((n, u) => n + u.stats.atk, 0) / units.length;
@@ -63,6 +63,16 @@ export function stageRows(): StageRow[] {
     rows.push({ stage, realm: realmName(stage), boss: stage % 5 === 4, level, enemies: units.length, enemyHp, enemyAtk, enemyArmor, enemyDps, hero });
   }
   return rows;
+}
+
+/** Pack DPS (enemy basic attacks, before hero armour) for every stage on one wave seed. */
+export function packDpsByStage(seed: number): number[] {
+  const out: number[] = [];
+  for (let stage = 0; stage < TOTAL_STAGES; stage++) {
+    const units = buildWave(stage, seed).map((inst) => makeEnemyUnit(inst, stage));
+    out.push(units.reduce((n, u) => n + basicDps(u.stats.atk, u.stats.crit, u.stats.critMult, u.stats.speed, 0), 0));
+  }
+  return out;
 }
 
 export function scalingReport(): string {

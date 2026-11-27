@@ -144,14 +144,14 @@ export const CLASSES: ClassDef[] = [
     tagline: 'Every root remembers, every wolf sings.',
     lore: 'She walked into the Whisperwood as a child and walked out a hundred years later, followed by half the forest.',
     colors: { main: '#8dffc2', glow: '#3ddc97', cloth: '#2d5a3f', accent: '#e7ffd4' },
-    stats: baseStats({ maxHp: 310, atk: 27, armor: 11, crit: 0.1, critMult: 1.5, speed: 1.8, dodge: 0.04, regen: 0.6 }),
+    stats: baseStats({ maxHp: 310, atk: 27, armor: 11, crit: 0.1, critMult: 1.5, speed: 1.8, dodge: 0.04, regen: 0.3 }),
     passive: { name: 'Verdance', desc: 'Regenerates 1.4 HP each second.', icon: 'leaf' },
     abilities: [
       { id: 'thorn-lash', name: 'Thorn Lash', desc: 'Vines strike all foes for 90% ATK and slow them.', icon: 'leaf', cooldown: 6.5, target: 'allEnemies', power: 0.9, effect: { kind: 'slow', duration: 3, power: 1.25 } },
-      { id: 'spirit-bloom', name: 'Spirit Bloom', desc: 'Heal 24% HP and regenerate for 5s. Cleanses burns.', icon: 'bloom', cooldown: 10, target: 'self', heal: 0.24, cleanse: true, selfEffect: { kind: 'regen', duration: 5, power: 3 } },
+      { id: 'spirit-bloom', name: 'Spirit Bloom', desc: 'Heal 16% HP and regenerate for 5s. Cleanses burns.', icon: 'bloom', cooldown: 10, target: 'self', heal: 0.16, cleanse: true, selfEffect: { kind: 'regen', duration: 5, power: 3 } },
       { id: 'spirit-wolf', name: 'Call the Pack', desc: 'Summon a spirit wolf that fights beside you for 12s.', icon: 'wolf', cooldown: 14, target: 'self', summon: true },
     ],
-    ultimate: { id: 'gaia-embrace', name: "Gaia's Embrace", desc: 'Heal 25%, then all foes take 220% ATK and are slowed.', icon: 'crown', cooldown: 0, target: 'allEnemies', power: 2.2, heal: 0.25, effect: { kind: 'slow', duration: 4, power: 1.4 } },
+    ultimate: { id: 'gaia-embrace', name: "Gaia's Embrace", desc: 'Heal 20%, then all foes take 220% ATK and are slowed.', icon: 'crown', cooldown: 0, target: 'allEnemies', power: 2.2, heal: 0.2, effect: { kind: 'slow', duration: 4, power: 1.4 } },
     guard: { id: 'spirit-ward', name: 'Spirit Ward', desc: 'Call a spirit shield. Halves any hit; time it to a heavy blow to stagger the foe and mend your wounds.', icon: 'bloom', bonus: 'heal' },
   },
 ];
@@ -340,14 +340,36 @@ export function enemyCountFor(stageInLoc: number): number {
   return stageInLoc >= manyFromStageInLoc ? many : normal;
 }
 
+export type AffixId = 'burning' | 'swift' | 'armored' | 'vampiric';
+export interface AffixDef { id: AffixId; name: string; desc: string }
+export const AFFIXES: AffixDef[] = [
+  { id: 'burning', name: 'Burning', desc: 'Its attacks set you ablaze.' },
+  { id: 'swift', name: 'Swift', desc: 'Attacks a third faster.' },
+  { id: 'armored', name: 'Armored', desc: 'Heavy plating: more armor and 15% less damage taken.' },
+  { id: 'vampiric', name: 'Vampiric', desc: 'Heals for a quarter of the damage it deals.' },
+];
+
+/** mulberry32: small, fast, good enough for a game sim, and identical across platforms. */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export interface EnemyInstance {
   def: EnemyDef;
   name: string;
   hpScale: number;
   atkScale: number;
+  affix?: AffixId;
 }
 
-export function buildWave(globalStage: number): EnemyInstance[] {
+export function buildWave(globalStage: number, runSeed: number): EnemyInstance[] {
   const { location, stageInLoc } = stageInfo(globalStage);
   const E = BALANCE.enemy;
   const isBoss = stageInLoc === 4;
@@ -360,12 +382,25 @@ export function buildWave(globalStage: number): EnemyInstance[] {
   }
   const count = enemyCountFor(stageInLoc);
   const picks = location.enemies;
-  const off = stageInLoc % picks.length;
+  const rand = seededRandom((runSeed >>> 0) * 31 + globalStage * 7919 + 1);
+  const s = scaleForStage(globalStage);
+  const eliteIndex = rand() < BALANCE.run.eliteChance[stageInLoc] ? Math.floor(rand() * count) : -1;
+  const realmIndex = Math.floor(globalStage / 5);
+  const affixChance = Math.min(BALANCE.run.affixCap, BALANCE.run.affixChance + realmIndex * BALANCE.run.affixPerRealm);
   const out: EnemyInstance[] = [];
   for (let i = 0; i < count; i++) {
-    const def = picks[(off + i) % picks.length];
-    const s = scaleForStage(globalStage);
-    out.push({ def, name: def.name, hpScale: s * (E.waveHp + i * E.waveHpStep), atkScale: 1 + globalStage * E.atkPerStage });
+    const isElite = i === eliteIndex;
+    const def = isElite ? picks[2] : (rand() < 0.5 ? picks[0] : picks[1]);
+    let affix: AffixId | undefined;
+    if (isElite && rand() < affixChance) affix = AFFIXES[Math.floor(rand() * AFFIXES.length)].id;
+    const affixName = affix ? AFFIXES.find(a => a.id === affix)!.name : '';
+    out.push({
+      def,
+      name: affix ? `${affixName} ${def.name}` : def.name,
+      hpScale: s * (E.waveHp + i * E.waveHpStep),
+      atkScale: 1 + globalStage * E.atkPerStage,
+      affix,
+    });
   }
   return out;
 }
