@@ -735,7 +735,7 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   display: flex; align-items: center; gap: 12px; padding: 10px 15px; border-radius: 8px;
   border: 1px solid rgba(150, 190, 230, 0.34);
   background: linear-gradient(180deg, rgba(24, 42, 62, 0.42), rgba(12, 8, 18, 0.95));
-  min-width: 190px;
+  min-width: 230px; max-width: 300px;
 }
 .guard-btn {
   width: 58px; height: 58px; border-radius: 50%; position: relative; flex: 0 0 auto;
@@ -751,6 +751,8 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
 .guard-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .guard-info .k { font-family: var(--display); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: #8fb8dd; }
 .guard-info b { font-family: var(--display); font-size: 15px; color: #dceeff; line-height: 1.15; white-space: nowrap; }
+.guard-info span { font-size: 10.5px; color: var(--muted); line-height: 1.32; }
+.guard-state { font-family: var(--display); font-size: 9.5px; color: #aed6ff !important; margin-top: 2px; letter-spacing: .12em; text-transform: uppercase; }
 .guard-wrap.ready { border-color: rgba(174, 214, 255, 0.72); box-shadow: 0 0 32px rgba(130, 180, 230, 0.18); }
 .guard-btn.ready {
   cursor: pointer; color: #152538; border-color: #f0f8ff;
@@ -937,7 +939,7 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   .class-tagline { min-height: 0; }
   .arena-bottom { grid-template-columns: 1fr; }
   .ult-wrap { min-width: 0; }
-  .guard-wrap { min-width: 0; }
+  .guard-wrap { min-width: 0; max-width: none; } 
   .ability { width: 44px; height: 44px; }
   .ability .icon { width: 21px; height: 21px; }
   .ability-meta { display: none; }
@@ -965,10 +967,10 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   .stage-link { width: 5px; }
   .stage-node { width: 30px; height: 30px; }
   .game-logo { font-size: clamp(36px, 9.5vw, 50px); }
-  .ult-info > span:not(.ult-pct) { display: none; }
+  .ult-info > span:not(.ult-pct), .guard-info > span:not(.guard-state):not(.k) { display: none; }
   /* The phone row stacks: dropping the labels keeps both controls on screen with no side scroll. */
   .guard-info, .ult-info { display: none; }
-  .guard-wrap, .ult-wrap { min-width: 0; padding: 8px 10px; gap: 0; justify-content: center; }
+  .guard-wrap, .ult-wrap { min-width: 0; max-width: none; padding: 8px 10px; gap: 0; justify-content: center; }
   .guard-btn, .ult-btn { width: 52px; height: 52px; }
 }
 @media (orientation: landscape) and (max-height: 520px) {
@@ -988,8 +990,8 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   .arena-bottom { grid-template-columns: 1fr; gap: 8px; }
   .ability-bar { justify-content: center; padding: 8px; }
   .ult-wrap { padding: 8px 10px; gap: 8px; min-width: 0; }
-  .guard-wrap { padding: 8px 10px; gap: 8px; min-width: 0; }
-  .ult-info > span:not(.ult-pct) { display: none; }
+  .guard-wrap { padding: 8px 10px; gap: 8px; min-width: 0;  }
+  .ult-info > span:not(.ult-pct), .guard-info > span:not(.guard-state):not(.k) { display: none; }
   .battle-log { display: none; }
   .result-panel { padding: 18px 20px; }
   .result-panel h2 { font-size: 30px; }

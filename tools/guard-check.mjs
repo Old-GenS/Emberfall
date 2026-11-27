@@ -158,10 +158,12 @@ async function main() {
         const guard = page.locator('#guard-btn');
         assert(await guard.count() === 1, '#guard-btn is missing');
         const tip = await guard.getAttribute('data-tip');
-        assert(tip === 'skill:warden:guard', `data-tip was ${String(tip)}`);
+        assert(tip === null, `guard button should not open a hover card (data-tip ${String(tip)})`);
+        const info = await page.textContent('.guard-info');
+        assert(/Bulwark/.test(info) && /gold/.test(info), `guard box text: ${info}`);
         const classes = await guard.getAttribute('class');
         assert((classes ?? '').split(/\s+/).includes('ready'), `class was ${String(classes)}`);
-        return 'data-tip skill:warden:guard, ready';
+        return 'description in the guard box, no hover card, ready';
       }],
       ['Telegraph shows', async () => {
         await keepAlive();

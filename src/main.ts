@@ -580,6 +580,12 @@ function updateHud(): void {
     guardBtn.classList.toggle('cooling', !ready);
     guardBtn.classList.toggle('alert', ready && battle.telegraphs.length > 0);
     if (guardRing) guardRing.style.strokeDashoffset = `${201 * battle.guardCd / BALANCE.guard.cooldown}`;
+    const state = document.getElementById('guard-state');
+    if (state) {
+      const text = battle.guardActive > 0 ? 'Guarding' : ready ? (battle.telegraphs.length ? 'Ready · press now' : 'Ready · F') : `Recovering · ${battle.guardCd.toFixed(1)}s`;
+      if (state.textContent !== text) state.textContent = text;
+    }
+    document.getElementById('guard-wrap')?.classList.toggle('ready', ready);
   }
   for (let i = 0; i < hero.abilities.length; i++) {
     const cd = hero.abilityCds[i] ?? 0;

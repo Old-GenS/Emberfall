@@ -288,6 +288,14 @@ export interface BattleUIInfo {
   stats: ReturnType<typeof heroStats>;
 }
 
+/** What a perfect guard adds for each class, in the guard box under the battle. */
+const GUARD_BONUS_TEXT: Record<'shield' | 'burn' | 'counter' | 'heal', string> = {
+  shield: 'you gain a ward',
+  burn: 'bursts into flame',
+  counter: 'takes a critical counter',
+  heal: 'your wounds mend',
+};
+
 export function renderBattle(info: BattleUIInfo): string {
   const { cls, stage, save } = info;
   const { location, stageInLoc } = stageInfo(stage);
@@ -330,12 +338,12 @@ export function renderBattle(info: BattleUIInfo): string {
           <div class="ability-meta">Reliquary<b>Skills cast on cooldown</b></div>
         </div>
         <div class="guard-wrap" id="guard-wrap">
-          <button class="guard-btn" id="guard-btn" data-tip="skill:${cls.id}:guard" aria-label="${cls.guard.name}">
+          <button class="guard-btn" id="guard-btn" aria-label="${cls.guard.name}">
             ${icon(cls.guard.icon)}
             <svg class="charge-ring" viewBox="0 0 68 68"><circle id="guard-ring" cx="34" cy="34" r="32" stroke-dasharray="201" stroke-dashoffset="0"/></svg>
             <span class="key" aria-hidden="true">F</span>
           </button>
-          <div class="guard-info"><span class="k">✦ Guard</span><b>${cls.guard.name}</b></div>
+          <div class="guard-info"><span class="k">✦ Guard</span><b>${cls.guard.name}</b><span>Press as the red ring turns gold. Perfect: the foe staggers and ${GUARD_BONUS_TEXT[cls.guard.bonus]}.</span><span class="guard-state" id="guard-state">Ready</span></div>
         </div>
         <div class="ult-wrap" id="ult-wrap">
           <button class="ult-btn" id="ult-btn" title="Release your ultimate when charged" aria-label="Ultimate">
