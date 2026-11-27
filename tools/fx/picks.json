@@ -1,5 +1,13 @@
 {
   "fire-burst": "fire-d",
   "slash": "slash-a",
-  "slash-heavy": "slash-b"
+  "slash-heavy": "slash-b",
+  "frost-shatter": "frost-a",
+  "holy-flare": "holy-a",
+  "shadow-strike": "shadow-a",
+  "spirit-wisp": "spirit-a",
+  "heal-bloom": "heal-a",
+  "shield-ring": "shield-a",
+  "crit-star": "crit-a",
+  "ult-explosion": "ult-a"
 }

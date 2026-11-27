@@ -25,11 +25,25 @@ function getRealmImage(locId: string): HTMLImageElement | null {
 }
 
 const FIRE_COLOR = '#ff9442';
+/** Bursts that look right at any angle get a random rotation and a slow spin. */
+const ROUND_FX = new Set<FxSpriteName>(['fire-burst', 'frost-shatter', 'shadow-strike', 'spirit-wisp', 'ult-explosion']);
+/** Painted impact for each ability colour from abilityColor(). */
+const IMPACT_BY_COLOR: Record<string, FxSpriteName> = {
+  [FIRE_COLOR]: 'fire-burst',
+  '#9fe8ff': 'frost-shatter',
+  '#8dffc2': 'spirit-wisp',
+  '#ffd77a': 'holy-flare',
+  '#b48cff': 'shadow-strike',
+  '#ff7ad9': 'shadow-strike',
+};
 
 /* ------------------------- Painted effect sprites ------------------------- */
 
 /** Painted effects on pure black (public/assets/fx), drawn additively so black vanishes. */
-export const FX_SPRITES = ['fire-burst', 'slash', 'slash-heavy'] as const;
+export const FX_SPRITES = [
+  'fire-burst', 'slash', 'slash-heavy', 'frost-shatter', 'holy-flare', 'shadow-strike',
+  'spirit-wisp', 'heal-bloom', 'shield-ring', 'crit-star', 'ult-explosion',
+] as const;
 export type FxSpriteName = (typeof FX_SPRITES)[number];
 const fxImages = new Map<string, HTMLImageElement>();
 
@@ -190,6 +204,9 @@ export class SceneRenderer {
   private marks: ExecutionMark[] = [];
   private floaters: Floater[] = [];
   private fxSprites: FxSprite[] = [];
+  private fxThrottle = new Map<string, number>();
+  /** Seconds of hit-stop requested by a big hit; main.ts holds battle time while it runs down. */
+  hitStop = 0;
   private ambient: Ambient[] = [];
 
   private shake = 0;
@@ -237,6 +254,8 @@ export class SceneRenderer {
     this.battle = battle;
     this.enrageStartedAt = null;
     this.fxSprites = [];
+    this.fxThrottle.clear();
+    this.hitStop = 0;
     this.enrage = enrageMultiplier(battle.elapsed);
   }
 
@@ -368,7 +387,13 @@ export class SceneRenderer {
             kind: e.crit ? 'shard' : 'spark',
           });
         }
+        if (e.crit) this.spawnFx('crit-star', pos.x, pos.y - 96 * pos.scale, 150 * pos.scale, { life: 0.36, grow: 0.5, rot: Math.random() * 0.6 });
+        if (e.kind === 'ult' && this.throttle(`ult:${e.target.uid}`, 0.35)) {
+          this.spawnFx('ult-explosion', pos.x, pos.y - 70 * pos.scale, 280 * pos.scale, { life: 0.7, grow: 0.7 });
+        }
         if (e.kind !== 'dot') {
+          // A tiny freeze sells the weight of crits and ultimates.
+          if (e.crit || e.kind === 'ult') this.hitStop = Math.max(this.hitStop, e.kind === 'ult' ? 0.09 : 0.055);
           this.shake = Math.max(this.shake, e.crit ? 8 : e.kind === 'ult' ? 13 : 3);
           this.flash = Math.max(this.flash, e.crit ? 0.11 : 0.035);
           this.flashColor = e.kind === 'ult' ? '255,175,85' : e.crit ? '255,230,170' : '255,240,220';
@@ -382,6 +407,7 @@ export class SceneRenderer {
       case 'heal': {
         const pos = this.unitPosition(e.target);
         this.damageFloater(e.target.uid, pos.x, pos.y - 154 * pos.scale - 48, `+${Math.round(e.amount)}`, '#8dffc2', 21, -46);
+        if (this.throttle(`heal:${e.target.uid}`, 1.2)) this.spawnFx('heal-bloom', pos.x, pos.y - 40 * pos.scale, 130 * pos.scale, { life: 0.9, grow: 0.5 });
         for (let i = 0; i < 10; i++) {
           this.particles.push({
             x: pos.x + (Math.random() - 0.5) * 52, y: pos.y - 26 - Math.random() * 76,
@@ -395,6 +421,7 @@ export class SceneRenderer {
       case 'shield': {
         const pos = this.unitPosition(e.target);
         this.ring(pos.x, pos.y - 74, '#ffe29a', 0.65, 58);
+        this.spawnFx('shield-ring', pos.x, pos.y - 78 * pos.scale, 210 * pos.scale, { life: 0.7, grow: 0.35, spin: 0.4 });
         for (let i = 0; i < 14; i++) {
           const a = (i / 14) * Math.PI * 2;
           this.particles.push({
@@ -485,6 +512,7 @@ export class SceneRenderer {
     // 2. DEATH MARK (Shadowblade Ultimate — Crimson/Jade Execution Tarot Cross!)
     if (id === 'death-mark') {
       this.marks.push({ x: tgt.x, y: tgt.y - 82 * tgt.scale, color: '#ff4d79', life: 0.85, maxLife: 0.85 });
+      this.spawnFx('shadow-strike', tgt.x, tgt.y - 82 * tgt.scale, 260 * tgt.scale, { delay: 0.12, life: 0.75, spin: 0.6 });
       this.slashes.push({ x: tgt.x, y: tgt.y - 80 * tgt.scale, radius: 92, angle: -0.8, sweep: 1.7, color: '#7df2c0', glow: '#b48cff', life: 0.42, maxLife: 0.42, dir: 1 });
       this.slashes.push({ x: tgt.x, y: tgt.y - 80 * tgt.scale, radius: 92, angle: 2.2, sweep: 1.7, color: '#ff5c8a', glow: '#b48cff', life: 0.42, maxLife: 0.42, dir: -1 });
       return;
@@ -496,6 +524,7 @@ export class SceneRenderer {
       for (const f of targets) {
         const fp = this.unitPosition(f);
         this.briars.push({ x: fp.x, y: fp.y + 4, color: '#6ef2b1', glow: '#e7ffd4', life: isUlt ? 1.0 : 0.7, maxLife: isUlt ? 1.0 : 0.7, seed: f.uid * 17 });
+        this.spawnFx('spirit-wisp', fp.x, fp.y - 64 * fp.scale, (isUlt ? 210 : 150) * fp.scale, { delay: 0.15, life: 0.8 });
       }
       if (isUlt) this.pillars.push({ x: src.x, y: src.y, width: 80, color: '#8dffc2', glow: '#3ddc97', life: 0.85, maxLife: 0.85 });
       return;
@@ -507,7 +536,7 @@ export class SceneRenderer {
       for (const f of targets) {
         const fp = this.unitPosition(f);
         this.pillars.push({ x: fp.x, y: fp.y, width: isUlt ? 96 : 64, color: col, glow: '#ffffff', life: 0.72, maxLife: 0.72 });
-        if (col === FIRE_COLOR) this.spawnFx('fire-burst', fp.x, fp.y - 66 * fp.scale, (isUlt ? 230 : 170) * fp.scale, { delay: 0.18, life: 0.7 });
+        this.impactFx(col, fp.x, fp.y - 66 * fp.scale, (isUlt ? 230 : 170) * fp.scale, 0.18, 0.7);
       }
       return;
     }
@@ -520,6 +549,7 @@ export class SceneRenderer {
       }
       if (id === 'shield-slam') this.ring(tgt.x, tgt.y - 70, '#ffe29a', 0.45, 68);
       this.spawnFx('slash-heavy', tgt.x, tgt.y - 80 * tgt.scale, 190 * tgt.scale, { flip: facing < 0, rot: (Math.random() - 0.5) * 0.4, life: 0.42 });
+      if (col !== '#ffd27a') this.impactFx(col, tgt.x, tgt.y - 78 * tgt.scale, 130 * tgt.scale, 0.08, 0.5);
       return;
     }
 
@@ -540,7 +570,7 @@ export class SceneRenderer {
           size: id === 'ember-lance' || id === 'breath' ? 13 : 9,
         });
         // The bolt lands after its 0.32 s flight; fire spells burst on impact.
-        if (col === FIRE_COLOR) this.spawnFx('fire-burst', fp.x, fp.y - 72 * fp.scale, (id === 'flame-nova' ? 150 : 175) * fp.scale, { delay: 0.3, life: 0.65 });
+        this.impactFx(col, fp.x, fp.y - 72 * fp.scale, (id === 'flame-nova' ? 150 : 175) * fp.scale, 0.3, 0.65);
       }
       return;
     }
@@ -590,10 +620,24 @@ export class SceneRenderer {
     if (!getFxImage(name)) return;
     const life = o.life ?? 0.4;
     this.fxSprites.push({
-      name, x, y, size, rot: o.rot ?? (name === 'fire-burst' ? Math.random() * Math.PI * 2 : 0),
-      spin: o.spin ?? (name === 'fire-burst' ? 0.9 : 0), flip: !!o.flip, life, maxLife: life,
-      delay: o.delay ?? 0, grow: o.grow ?? (name === 'fire-burst' ? 0.6 : 0.3),
+      name, x, y, size, rot: o.rot ?? (ROUND_FX.has(name) ? Math.random() * Math.PI * 2 : 0),
+      spin: o.spin ?? (ROUND_FX.has(name) ? 0.9 : 0), flip: !!o.flip, life, maxLife: life,
+      delay: o.delay ?? 0, grow: o.grow ?? (ROUND_FX.has(name) ? 0.6 : 0.3),
     });
+  }
+
+  /** The painted impact for an ability colour, if there is one. */
+  private impactFx(col: string, x: number, y: number, size: number, delay: number, life: number): void {
+    const name = IMPACT_BY_COLOR[col];
+    if (name) this.spawnFx(name, x, y, size, { delay, life });
+  }
+
+  /** True at most once per `gap` seconds for a key, so ticking heals don't stack effects. */
+  private throttle(key: string, gap: number): boolean {
+    const last = this.fxThrottle.get(key);
+    if (last !== undefined && this.time - last < gap) return false;
+    this.fxThrottle.set(key, this.time);
+    return true;
   }
 
   private drawFxSprites(ctx: CanvasRenderingContext2D, dt: number): void {

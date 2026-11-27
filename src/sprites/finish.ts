@@ -190,6 +190,16 @@ function paintFinish(
   off.globalCompositeOperation = 'source-atop';
   off.globalAlpha = 0.55;
   off.drawImage(rim.canvas, 0, 0);
+
+  /* (e) hit flash: a fresh hit (anim.hit near 1, decaying at 4/s) whitens the
+   * silhouette for about a tenth of a second. */
+  const flash = u.alive ? Math.max(0, (u.anim.hit - 0.55) / 0.45) : 0;
+  if (flash > 0) {
+    off.globalCompositeOperation = 'source-atop';
+    off.globalAlpha = 0.75 * flash;
+    off.fillStyle = '#fff6ec';
+    off.fillRect(0, 0, w, h);
+  }
   off.globalCompositeOperation = 'source-over';
   off.globalAlpha = 1;
 }

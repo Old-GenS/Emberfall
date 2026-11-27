@@ -479,7 +479,10 @@ function loop(now: number): void {
   const frame = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));
   const dt = Math.min(0.05, frame);
   lastFrame = now;
-  if (!paused) {
+  // Hit-stop: a big hit holds battle time for a few frames while visuals keep running.
+  const held = !paused && renderer.hitStop > 0;
+  if (held) renderer.hitStop = Math.max(0, renderer.hitStop - frame);
+  if (!paused && !held) {
     // Step in slices of at most 50 ms until the frame's time is used up. Battle.update clamps a
     // single step to 50 ms, so one update of dt * speed was capped to ~1.5x at 30 fps and lost
     // time below 20 fps; slices keep the pace right on a slow phone and on the 2x button.
