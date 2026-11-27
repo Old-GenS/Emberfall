@@ -41,6 +41,8 @@ let overlayShown = false;
 // `stage` is the stage that was cleared: the save has already moved on by the time the result
 // overlay renders, so it must not be looked up from the save again.
 let pendingResult: { xp: number; levelUps: number; final: boolean; stage: number } | null = null;
+let rewardChoices: ReturnType<typeof pickBoonChoices> = [];
+let rerollUsed = false;
 let endHandled = false;
 let endTimer = 0;
 let logs: string[] = [];
@@ -450,7 +452,7 @@ function showResultOverlay(): void {
         </div>
         <div class="result-actions">
           <button class="btn primary" data-result="spoils">${res?.final ? 'See the Ending' : 'Claim Your Boon'}</button>
-          <button class="btn ghost" data-result="map">${res?.final ? 'Return to Map' : 'Skip Boon'}</button>
+          ${res?.final ? '<button class="btn ghost" data-result="map">Return to Map</button>' : ''}
         </div>
       </div>
     </div>`;
@@ -552,10 +554,22 @@ function showRewardScreen(): void {
   const res = pendingResult;
   if (!res) return navigate('map');
   screen = 'reward';
-  const choices = pickBoonChoices();
-  render(renderReward(classById(save.classId), res.levelUps, res.xp, choices));
+  rewardChoices = pickBoonChoices();
+  rerollUsed = false;
+  render(renderReward(classById(save.classId), res.levelUps, res.xp, rewardChoices, true));
   audio.playMusic('map');
   window.scrollTo({ top: 0 });
+}
+
+/** One reroll per reward screen: a fresh hand that avoids the cards just shown. */
+function rerollBoons(): void {
+  const save = getSave();
+  const res = pendingResult;
+  if (rerollUsed || screen !== 'reward' || !res || !save.classId) return;
+  rerollUsed = true;
+  rewardChoices = pickBoonChoices(undefined, rewardChoices.map(b => b.id));
+  sfx('select');
+  render(renderReward(classById(save.classId), res.levelUps, res.xp, rewardChoices, false));
 }
 
 function chooseBoon(id: string): void {
@@ -682,6 +696,7 @@ document.addEventListener('click', (ev) => {
     if (stage === save.stage && save.stage < TOTAL_STAGES) startBattle();
     return;
   }
+  if (target.closest('[data-reroll]')) { rerollBoons(); return; }
   const boonEl = target.closest<HTMLElement>('[data-boon]');
   if (boonEl) { chooseBoon(boonEl.dataset.boon!); return; }
   const resultEl = target.closest<HTMLElement>('[data-result]');

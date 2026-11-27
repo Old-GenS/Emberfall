@@ -41,6 +41,10 @@ interface ArenaEvent {
   particles: FxParticle[];
   puffs: { x: number; y: number; r: number }[];
   seed: number;
+  /** Void Rift: jagged offsets along the tear, top to bottom. */
+  crack: number[];
+  /** Shardfall: glints where shards strike the floor. */
+  impacts: { x: number; y: number; age: number; size: number }[];
 }
 
 interface Spark {
@@ -204,15 +208,17 @@ export class RealmEvents {
         }
       }
     } else if (kind === 'snow') {
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 34; i++) {
+        // originY is the floor height this shard shatters on.
         push({
-          x: rand(-20, 980), y: rand(-360, 520),
-          vx: rand(-14, 14), vy: rand(150, 290),
-          size: rand(1.4, 3.4), color: i % 3 === 0 ? '#e9fbff' : '#9fe8ff',
+          x: rand(20, 940), y: rand(-520, 260),
+          vx: rand(-10, 10), vy: rand(380, 560),
+          size: rand(3.5, 8), color: i % 3 === 0 ? '#ffffff' : '#bff1ff',
+          originY: rand(410, 500), angle: rand(-0.12, 0.12),
         });
       }
     } else if (kind === 'bubble') {
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < 34; i++) {
         push({
           x: rand(-100, 1000), y: rand(390, 540),
           vx: rand(-6, 10), vy: rand(-70, -24),
@@ -220,24 +226,39 @@ export class RealmEvents {
         });
       }
     } else {
-      for (let i = 0; i < 34; i++) {
+      for (let i = 0; i < 48; i++) {
         push({
-          x: rand(400, 560), y: rand(190, 330),
-          size: rand(1.4, 3.6), color: i % 3 === 0 ? '#e4b8ff' : '#8d5bff',
-          angle: rand(0, Math.PI * 2), radius: rand(18, 100), spin: rand(0.7, 2.1),
+          x: 480, y: 252,
+          size: rand(1.4, 3.6), color: i % 3 === 0 ? '#f1d6ff' : '#9a66ff',
+          angle: rand(0, Math.PI * 2), radius: rand(40, 190), spin: rand(1.2, 2.6),
         });
       }
     }
-    return { kind, age: 0, particles, puffs, seed: Math.random() * 1000 };
+    const crack: number[] = [];
+    for (let i = 0; i <= 12; i++) crack.push(i === 0 || i === 12 ? 0 : rand(-13, 13));
+    return { kind, age: 0, particles, puffs, seed: Math.random() * 1000, crack, impacts: [] };
   }
 
   private stepParticles(ev: ArenaEvent, dt: number): void {
+    for (const im of ev.impacts) im.age += dt;
+    ev.impacts = ev.impacts.filter((im) => im.age < 0.5);
     for (const p of ev.particles) {
       if (ev.kind === 'ash') {
-        p.angle += p.spin * dt;
-        p.radius += 14 * dt;
+        // Ash is pulled into the rift: spiralling in, faster as it nears the tear.
+        p.angle += p.spin * dt * (1 + 60 / (p.radius + 20));
+        p.radius -= (36 + 2200 / (p.radius + 30)) * dt;
+        if (p.radius < 10) { p.radius = rand(150, 200); p.angle = rand(0, Math.PI * 2); }
         p.x = 480 + Math.cos(p.angle) * p.radius;
-        p.y = 255 + Math.sin(p.angle) * p.radius * 0.62;
+        p.y = 252 + Math.sin(p.angle) * p.radius * 0.55;
+      } else if (ev.kind === 'snow') {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.y >= p.originY) {
+          ev.impacts.push({ x: p.x, y: p.originY, age: 0, size: p.size });
+          // Only re-drop while there is time for the shard to land again.
+          if (ev.age < EVENT_DURATION - 0.9) { p.y -= rand(520, 700); p.x = rand(20, 940); }
+          else p.y = 9999;
+        }
       } else if (ev.kind === 'spore') {
         p.phase += dt * 2;
         p.x += p.vx * dt + Math.sin(p.phase) * 12 * dt;
@@ -246,8 +267,8 @@ export class RealmEvents {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
       }
-      if (ev.kind === 'ember' || ev.kind === 'snow') {
-        if (p.y > 560) { p.y -= 620; p.x -= ev.kind === 'ember' ? 120 : 0; }
+      if (ev.kind === 'ember') {
+        if (p.y > 560) { p.y -= 620; p.x -= 120; }
         if (p.x > 1010) p.x -= 1080;
         if (p.x < -60) p.x += 1080;
       } else if (ev.kind === 'bubble') {
@@ -288,26 +309,88 @@ export class RealmEvents {
         ctx.fill();
       }
     } else if (ev.kind === 'snow') {
-      if (ev.age < 0.55) {
-        ctx.globalAlpha = 0.13 * (1 - ev.age / 0.55);
-        ctx.fillStyle = '#bdefff';
+      const fade = ev.age > EVENT_DURATION - 0.4 ? Math.max(0, (EVENT_DURATION - ev.age) / 0.4) : 1;
+      if (ev.age < 0.7) {
+        // A cold flash that hangs at the top of the sky.
+        const sky = ctx.createLinearGradient(0, 0, 0, 540);
+        sky.addColorStop(0, `rgba(190,240,255,${0.34 * (1 - ev.age / 0.7)})`);
+        sky.addColorStop(0.6, `rgba(190,240,255,${0.08 * (1 - ev.age / 0.7)})`);
+        sky.addColorStop(1, 'rgba(190,240,255,0)');
+        ctx.fillStyle = sky;
         ctx.fillRect(0, 0, 960, 540);
       }
       ctx.globalCompositeOperation = 'lighter';
       for (const p of ev.particles) {
-        ctx.globalAlpha = 0.7;
-        ctx.strokeStyle = p.color;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = '#9fe8ff';
-        ctx.lineWidth = p.size * 0.7;
+        if (p.y > 900) continue;
+        const w = p.size;
+        const len = p.size * 5.5;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        // Motion streak above the shard.
+        ctx.globalAlpha = 0.32 * fade;
+        const streak = ctx.createLinearGradient(0, -len * 3.2, 0, -len * 0.5);
+        streak.addColorStop(0, 'rgba(159,232,255,0)');
+        streak.addColorStop(1, 'rgba(200,245,255,0.9)');
+        ctx.strokeStyle = streak;
+        ctx.lineWidth = w * 0.9;
         ctx.beginPath();
-        ctx.moveTo(p.x, p.y - p.size * 3.5);
-        ctx.lineTo(p.x, p.y);
+        ctx.moveTo(0, -len * 3.2);
+        ctx.lineTo(0, -len * 0.5);
         ctx.stroke();
-        ctx.fillStyle = '#f2fdff';
+        // The crystal: a long faceted diamond, point down.
+        ctx.globalAlpha = 0.95 * fade;
+        const body = ctx.createLinearGradient(0, -len, 0, w);
+        body.addColorStop(0, 'rgba(120,210,255,0.25)');
+        body.addColorStop(0.7, p.color);
+        body.addColorStop(1, '#ffffff');
+        ctx.fillStyle = body;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#9fe8ff';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 0.7, 0, Math.PI * 2);
+        ctx.moveTo(0, -len);
+        ctx.lineTo(w, -len * 0.3);
+        ctx.lineTo(0, w * 1.4);
+        ctx.lineTo(-w, -len * 0.3);
+        ctx.closePath();
         ctx.fill();
+        // Facet highlight.
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, -len * 0.92);
+        ctx.lineTo(0, w * 1.1);
+        ctx.stroke();
+        ctx.restore();
+      }
+      for (const im of ev.impacts) {
+        const t = im.age / 0.5;
+        const a = (1 - t) * fade;
+        ctx.globalAlpha = a * 0.8;
+        ctx.strokeStyle = '#d8f6ff';
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#9fe8ff';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.ellipse(im.x, im.y, 6 + t * im.size * 5, 2 + t * im.size * 1.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // Four-ray glint.
+        const r = im.size * (1.6 + 2.2 * (1 - Math.abs(t * 2 - 0.6)));
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(im.x - r, im.y - 3); ctx.lineTo(im.x + r, im.y - 3);
+        ctx.moveTo(im.x, im.y - 3 - r * 1.2); ctx.lineTo(im.x, im.y - 3 + r * 0.6);
+        ctx.stroke();
+        // Tiny chips thrown up.
+        ctx.fillStyle = '#e9fbff';
+        for (let k = 0; k < 4; k++) {
+          const dir = -Math.PI / 2 + (k - 1.5) * 0.55;
+          const d = t * im.size * 4.5;
+          ctx.fillRect(im.x + Math.cos(dir) * d, im.y - 3 + Math.sin(dir) * d + t * t * 14, 2, 2);
+        }
       }
     } else if (ev.kind === 'spore') {
       ctx.globalCompositeOperation = 'lighter';
@@ -331,17 +414,82 @@ export class RealmEvents {
         ctx.fill();
       }
     } else if (ev.kind === 'bubble') {
-      const sweep = -180 + (ev.age / EVENT_DURATION) * 1320;
-      const band = ctx.createLinearGradient(sweep - 120, 0, sweep + 120, 0);
-      band.addColorStop(0, 'rgba(79,224,207,0)');
-      band.addColorStop(0.5, 'rgba(79,224,207,0.22)');
-      band.addColorStop(1, 'rgba(79,224,207,0)');
-      ctx.fillStyle = band;
-      ctx.fillRect(sweep - 130, 360, 260, 180);
-      ctx.fillStyle = 'rgba(120,255,240,0.16)';
-      ctx.fillRect(sweep - 90, 425, 180, 22);
+      const fade = ev.age > EVENT_DURATION - 0.4 ? Math.max(0, (EVENT_DURATION - ev.age) / 0.4) : 1;
+      // The crest runs from off-screen left to off-screen right; the body trails behind it.
+      const crest = -120 + (ev.age / EVENT_DURATION) * 1400;
+      const tail = 420;
+      const base = 540;
+      const riseAt = (x: number): number => {
+        const u = (crest - x) / tail; // 0 at the crest, 1 at the end of the tail
+        if (u <= 0 || u >= 1) return 0;
+        return u < 0.12 ? Math.sin((u / 0.12) * Math.PI / 2) : 1 - ((u - 0.12) / 0.88) ** 1.4;
+      };
+      const top = (x: number) => {
+        const rise = riseAt(x);
+        return 478 - 92 * rise - Math.sin(x * 0.045 + ev.age * 7) * 4 * rise;
+      };
+      // The underside meets the crest at the front, so the wave has no hard vertical edge.
+      const bottom = (x: number) => {
+        const u = Math.min(1, Math.max(0, (crest - x) / tail / 0.5));
+        return 478 + (base - 478) * u * u * (3 - 2 * u);
+      };
+      const x0 = Math.max(-20, crest - tail);
+      const x1 = Math.min(980, crest + 2);
+      if (x1 > x0) {
+        ctx.globalAlpha = fade;
+        // Water body: deep teal at the floor, bright and clear near the crest.
+        const body = ctx.createLinearGradient(crest - tail, 0, crest, 0);
+        body.addColorStop(0, 'rgba(30,150,160,0)');
+        body.addColorStop(0.55, 'rgba(40,180,185,0.2)');
+        body.addColorStop(0.85, 'rgba(110,240,230,0.32)');
+        body.addColorStop(1, 'rgba(180,255,248,0.22)');
+        ctx.fillStyle = body;
+        const shape = new Path2D();
+        shape.moveTo(x0, bottom(x0));
+        for (let x = x0; x <= x1; x += 6) shape.lineTo(x, top(x));
+        shape.lineTo(x1, top(x1));
+        for (let x = x1; x >= x0; x -= 6) shape.lineTo(x, bottom(x));
+        shape.closePath();
+        ctx.fill(shape);
+        // A lighter inner band so the wave reads as a rolling volume, not a flat sheet.
+        ctx.globalCompositeOperation = 'lighter';
+        const sheen = ctx.createLinearGradient(0, 380, 0, 520);
+        sheen.addColorStop(0, 'rgba(160,255,245,0.16)');
+        sheen.addColorStop(1, 'rgba(160,255,245,0)');
+        ctx.fillStyle = sheen;
+        ctx.save();
+        ctx.clip(shape);
+        ctx.translate(-10, 14);
+        ctx.fill(shape);
+        ctx.restore();
+        // Foam along the crest line, densest at the front.
+        ctx.strokeStyle = 'rgba(235,255,252,0.85)';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#bffff6';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        const foamFrom = Math.max(x0, crest - tail * 0.55);
+        for (let x = foamFrom; x <= x1; x += 5) {
+          if (x === foamFrom) ctx.moveTo(x, top(x));
+          else ctx.lineTo(x, top(x));
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#f2fffd';
+        for (let i = 0; i < 26; i++) {
+          const n = Math.sin(ev.seed + i * 12.9898) * 43758.5453;
+          const r = n - Math.floor(n);
+          const fx = crest - r * r * tail * 0.45 - 2;
+          if (fx < x0 || fx > x1) continue;
+          const lift = Math.sin(ev.age * 9 + i) * 3 + (1 - r) * 8;
+          ctx.globalAlpha = fade * (0.9 - r * 0.6);
+          ctx.beginPath();
+          ctx.arc(fx, top(fx) - lift, 1.2 + (1 - r) * 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
       for (const p of ev.particles) {
-        ctx.globalAlpha = 0.65;
+        ctx.globalAlpha = 0.65 * fade;
         ctx.strokeStyle = p.color;
         ctx.shadowBlur = 8;
         ctx.shadowColor = '#4fe0cf';
@@ -349,36 +497,139 @@ export class RealmEvents {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 0.5 * fade;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(p.x - p.size * 0.35, p.y - p.size * 0.35, Math.max(0.6, p.size * 0.22), 0, Math.PI * 2);
+        ctx.fill();
       }
     } else {
-      const open = ev.age < 1 ? Math.min(1, ev.age / 1) : ev.age > 1.9 ? Math.max(0, (EVENT_DURATION - ev.age) / 0.6) : 1;
+      const open = ev.age < 0.7 ? ev.age / 0.7 : ev.age > 1.9 ? Math.max(0, (EVENT_DURATION - ev.age) / 0.6) : 1;
+      const ease = open * open * (3 - 2 * open);
       const cx = 480;
       const cy = 252;
+      const half = 96 * (0.35 + 0.65 * ease);
+      // Dim the arena around the rift so it reads as light being swallowed.
+      ctx.globalAlpha = 0.28 * ease;
+      const dim = ctx.createRadialGradient(cx, cy, 40, cx, cy, 520);
+      dim.addColorStop(0, 'rgba(20,0,40,0)');
+      dim.addColorStop(1, 'rgba(10,0,24,1)');
+      ctx.fillStyle = dim;
+      ctx.fillRect(0, 0, 960, 540);
+
+      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'lighter';
-      const glow = ctx.createRadialGradient(cx, cy, 4, cx, cy, 130 * open + 10);
-      glow.addColorStop(0, 'rgba(141,91,255,0.55)');
-      glow.addColorStop(1, 'rgba(141,91,255,0)');
+      const glow = ctx.createRadialGradient(cx, cy, 6, cx, cy, 200 * ease + 10);
+      glow.addColorStop(0, 'rgba(160,100,255,0.55)');
+      glow.addColorStop(0.5, 'rgba(110,50,220,0.18)');
+      glow.addColorStop(1, 'rgba(90,40,200,0)');
       ctx.fillStyle = glow;
-      ctx.fillRect(cx - 180, cy - 190, 360, 380);
-      ctx.strokeStyle = 'rgba(228,184,255,0.9)';
-      ctx.shadowBlur = 24;
-      ctx.shadowColor = '#8d5bff';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, 12 + 16 * open, 78 * open, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.sin(ev.age * 9) * 6, cy - 74 * open);
-      ctx.quadraticCurveTo(cx + 20 * open, cy, cx - Math.sin(ev.age * 7) * 6, cy + 74 * open);
-      ctx.stroke();
+      ctx.fillRect(cx - 220, cy - 220, 440, 440);
+
+      // Swirl arms turning around the tear.
+      ctx.lineCap = 'round';
+      for (let arm = 0; arm < 3; arm++) {
+        const base = ev.age * 2.4 + arm * (Math.PI * 2 / 3);
+        ctx.strokeStyle = arm === 1 ? 'rgba(240,210,255,0.35)' : 'rgba(150,90,255,0.4)';
+        ctx.lineWidth = 2.2;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#8d5bff';
+        ctx.beginPath();
+        for (let k = 0; k <= 24; k++) {
+          const t = k / 24;
+          const a = base + t * 2.6;
+          const r = (34 + t * 120) * ease;
+          const x = cx + Math.cos(a) * r;
+          const y = cy + Math.sin(a) * r * 0.55;
+          if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.globalAlpha = ease;
+        ctx.stroke();
+      }
+
+      // The tear: a jagged lens, black-violet inside with a hot rim.
+      const n = ev.crack.length - 1;
+      const edge = (side: number): [number, number][] => {
+        const pts: [number, number][] = [];
+        for (let i = 0; i <= n; i++) {
+          const t = i / n;
+          const w = Math.sin(t * Math.PI) * 24 * ease + Math.sin(ev.age * 11 + i * 2.1) * 1.5 * ease;
+          pts.push([cx + ev.crack[i] * (0.5 + 0.5 * ease) + side * w, cy - half + t * half * 2]);
+        }
+        return pts;
+      };
+      const left = edge(-1);
+      const right = edge(1);
+      const tear = new Path2D();
+      tear.moveTo(left[0][0], left[0][1]);
+      for (const [x, y] of left) tear.lineTo(x, y);
+      for (let i = right.length - 1; i >= 0; i--) tear.lineTo(right[i][0], right[i][1]);
+      tear.closePath();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(1, ease * 1.4);
+      const inside = ctx.createRadialGradient(cx, cy, 2, cx, cy, half);
+      inside.addColorStop(0, '#05000c');
+      inside.addColorStop(0.7, '#1a0536');
+      inside.addColorStop(1, '#4a168f');
+      ctx.fillStyle = inside;
+      ctx.fill(tear);
+      // Faint stars deep inside the rift.
+      ctx.fillStyle = '#e8d8ff';
+      for (let i = 0; i < 7; i++) {
+        const sx = cx + Math.sin(ev.seed + i * 3.7) * 9 * ease;
+        const sy = cy + Math.cos(ev.seed + i * 5.3) * half * 0.7;
+        ctx.globalAlpha = ease * (0.4 + 0.4 * Math.sin(ev.age * 6 + i));
+        ctx.fillRect(sx, sy, 1.6, 1.6);
+      }
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = ease;
+      ctx.strokeStyle = 'rgba(232,196,255,0.95)';
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = '#a46bff';
+      ctx.lineWidth = 2.6;
+      ctx.lineJoin = 'round';
+      ctx.stroke(tear);
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 6;
+      ctx.stroke(tear);
+
+      // Crackling arcs that flick off the rim.
+      if (ease > 0.5) {
+        ctx.strokeStyle = 'rgba(220,190,255,0.85)';
+        ctx.lineWidth = 1.2;
+        ctx.shadowBlur = 10;
+        for (let b = 0; b < 2; b++) {
+          if (Math.random() > 0.35) continue;
+          const src = Math.random() < 0.5 ? left : right;
+          const [sx, sy] = src[1 + Math.floor(Math.random() * (n - 1))];
+          const dir = src === left ? -1 : 1;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          let x = sx;
+          let y = sy;
+          for (let k = 0; k < 4; k++) {
+            x += dir * rand(8, 18);
+            y += rand(-12, 12);
+            ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+      }
+
+      // Ash being drawn into the tear.
       for (const p of ev.particles) {
-        ctx.globalAlpha = 0.75;
+        const near = Math.min(1, p.radius / 60);
+        ctx.globalAlpha = 0.8 * ease * near;
         ctx.fillStyle = p.color;
         ctx.shadowBlur = 9;
         ctx.shadowColor = '#8d5bff';
-        ctx.fillRect(p.x, p.y, p.size, p.size * 1.5);
+        const stretch = 1 + (1 - near) * 2;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle + Math.PI / 2);
+        ctx.fillRect(-p.size / 2, -p.size * stretch / 2, p.size, p.size * stretch);
+        ctx.restore();
       }
     }
     ctx.restore();

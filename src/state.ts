@@ -160,9 +160,12 @@ export function completeStage(): { xp: number; levelUps: number; stageCleared: n
   return { xp, levelUps, stageCleared: cleared };
 }
 
-export function pickBoonChoices(count = BALANCE.boons.offered): BoonDef[] {
+export function pickBoonChoices(count = BALANCE.boons.offered, exclude: string[] = []): BoonDef[] {
   const cls = save.classId!;
-  const pool = BOONS.filter(b => !b.classes || b.classes.includes(cls));
+  const all = BOONS.filter(b => !b.classes || b.classes.includes(cls));
+  // A reroll avoids the cards just shown, unless that would leave too few to fill the hand.
+  const fresh = all.filter(b => !exclude.includes(b.id));
+  const pool = fresh.length >= count ? fresh : all;
   const weights: Record<string, number> = BALANCE.boons.weight;
   const chosen: BoonDef[] = [];
   const available = [...pool];

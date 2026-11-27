@@ -82,7 +82,7 @@ export const CLASSES: ClassDef[] = [
     passive: { name: 'Bulwark', desc: 'Takes 8% less damage from all sources.', icon: 'shield' },
     abilities: [
       { id: 'shield-slam', name: 'Shield Slam', desc: 'Crush one foe for 130% ATK and stun it for 1.2s.', icon: 'hammer', cooldown: 6.5, target: 'enemy', power: 1.3, shield: 0.05, effect: { kind: 'stun', duration: 1.2, power: 1 } },
-      { id: 'radiant-ward', name: 'Radiant Ward', desc: 'Shield 12%. For 5s, reflect 25% of damage taken and deal 25% more damage.', icon: 'armor', cooldown: 9, target: 'self', shield: 0.12, selfEffects: [{ kind: 'thorns', duration: 5, power: 0.25 }, { kind: 'empower', duration: 6, power: 1.25 }] },
+      { id: 'radiant-ward', name: 'Radiant Ward', desc: 'Shield 12%. Reflect 25% of damage taken for 5s and deal 25% more damage for 6s.', icon: 'armor', cooldown: 9, target: 'self', shield: 0.12, selfEffects: [{ kind: 'thorns', duration: 5, power: 0.25 }, { kind: 'empower', duration: 6, power: 1.25 }] },
       { id: 'dawnbreaker', name: 'Dawnbreaker', desc: 'Holy shock hits all foes for 95% ATK and burns them.', icon: 'star', cooldown: 9.5, target: 'allEnemies', power: 0.95, effect: { kind: 'burn', duration: 4, power: 0.14 } },
     ],
     ultimate: { id: 'unbreakable', name: 'Unbreakable', desc: 'Gain a 25% shield, heal 18%, and reflect 20% of damage taken for 4s.', icon: 'shield', cooldown: 0, target: 'self', heal: 0.18, shield: 0.25, selfEffect: { kind: 'thorns', duration: 4, power: 0.2 } },

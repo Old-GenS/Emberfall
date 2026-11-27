@@ -341,7 +341,7 @@ export function renderBattle(info: BattleUIInfo): string {
   </div>`;
 }
 
-export function renderReward(cls: ClassDef, levelUps: number, xpGain: number, choices: ReturnType<typeof import('./state').pickBoonChoices>): string {
+export function renderReward(cls: ClassDef, levelUps: number, xpGain: number, choices: ReturnType<typeof import('./state').pickBoonChoices>, canReroll = true): string {
   return `<div class="screen reward-screen">
     <div class="reward-head">
       <div class="overline">✦ Spoils of Ash &amp; Glass ✦</div>
@@ -369,7 +369,10 @@ export function renderReward(cls: ClassDef, levelUps: number, xpGain: number, ch
         <div class="pick">✦ Inscribe Boon ✦</div>
       </button>`).join('')}
     </div>
-    <div class="center" style="margin-top:26px;color:var(--faint);font-size:10px;letter-spacing:.2em;text-transform:uppercase">❖ Every Arcana stacks for the remainder of your pilgrimage ❖</div>
+    <div class="reward-actions">
+      <button class="btn ghost reroll-btn" data-reroll ${canReroll ? '' : 'disabled'}>${icon('bolt')} ${canReroll ? 'Reroll Arcana · once' : 'Rerolled'}</button>
+    </div>
+    <div class="center" style="margin-top:18px;color:var(--faint);font-size:10px;letter-spacing:.2em;text-transform:uppercase">❖ Every Arcana stacks for the remainder of your pilgrimage ❖</div>
   </div>`;
 }
 
