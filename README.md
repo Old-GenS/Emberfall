@@ -2,9 +2,9 @@
 
 A handcrafted, single-page browser RPG and auto-battler. Choose one of four heroes, cross five ruined realms, collect boons, and put the Ashen King back in the ground.
 
-**Play:** once the included GitHub Pages workflow finishes, the game is live at the Pages URL for this repository (https://old-gens.github.io/Emberfall/).
+**Play:** once the included GitHub Pages workflow finishes, the game is live at **https://old-gens.github.io/Emberfall/**.
 
-Everything you see and hear is original and generated at runtime: no external images, sprites, audio files, or fonts. The art is procedural canvas/SVG, and the soundtrack is synthesized live with the Web Audio API.
+Everything you see and hear is original. Painted unit art, combat effects, realm backdrops and hero portraits ship in `public/assets/`, over procedural canvas layers and code-drawn vector fallbacks. The soundtrack and every sound effect are synthesized live with the Web Audio API. If the painted art is absent or fails to load, the game falls back to its code-drawn units and runs fully procedurally.
 
 ## Quick start
 
@@ -50,7 +50,8 @@ Requires Node 20+. Click once anywhere and the music begins (browser autoplay ru
 ## Tech
 
 - TypeScript + Vite, no runtime dependencies.
-- Canvas 2D renderer: procedural parallax backgrounds, vector characters, particles, floating combat text.
+- Canvas 2D renderer: painted unit sprites over procedural parallax backgrounds, with code-drawn vector fallbacks, particles and floating combat text.
+- Web fonts bundled locally (Cinzel, Cormorant Garamond, Inter) — no external font CDN.
 - Web Audio synthesis: five original generative tracks (one per realm) plus a title/map theme, with reverb, pads, plucked arps, leads and drums; all SFX are synthesized too.
 - DOM/CSS UI for menus, map, loadout and results.
 - `src/balance.ts` holds every tunable number; `tools/balance/` is a headless harness that plays the real game on seeded dice (see `docs/balance.md`).
@@ -69,10 +70,22 @@ src/
   audio.ts      Web Audio music sequencer and SFX
   state.ts      save data, XP/levels, boon rolls
   ui.ts         screen templates and icon set
+  sprites/      painted art loading, registration and fallbacks
   style.css     visual design
+public/assets/  ships with the game: units, fx, realms, portraits, fonts, ui
 tools/balance/  seeded headless harness over the real engine: tiers, targets, tables, sweeps
+tools/units/    art pipeline: background removal, trim, foot anchor, WEBP + manifest
 docs/balance.md  the balance record: targets, results, proposals, how to retune
+docs/unit-art.md  the prompt pack and framing rules for generating unit art
 ```
+
+## Art
+
+Painted art is additive: any unit without an image keeps its code-drawn fallback, so art can land a few pieces at a time.
+
+Originals live in `art/units/<id>.png` (git-ignored) as 1024×1024 PNGs on a flat green `#00FF00` background — magenta `#FF00FF` for units that are themselves green. `npm run units:prepare` removes the background, trims, finds the feet and writes `public/assets/units/<id>.webp` plus `manifest.json`. An optional `<id>-attack.webp` in the same framing is cross-faded in during attacks.
+
+`docs/unit-art.md` holds the per-unit prompts, the shared style block and the framing rules.
 
 ## Deployment
 
