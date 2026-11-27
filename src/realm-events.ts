@@ -3,6 +3,8 @@ import type { ParticleKind } from './data';
 
 /** Every realm event runs for this long, then leaves a spark behind. */
 const EVENT_DURATION = 2.5;
+/** Realm events are background flavour: everything they draw is scaled down to this opacity. */
+const EVENT_INTENSITY = 0.55;
 /** How long a spark stays tappable before it fades away. */
 const SPARK_LIFETIME = 5;
 /** The spark's tap radius in design pixels. */
@@ -80,7 +82,7 @@ export class RealmEvents {
   private kind: ParticleKind;
   private accent: string;
   private clock = 0;
-  private nextAt = 10;
+  private nextAt = 15;
   private index = 0;
   private current: ArenaEvent | null = null;
   private _spark: Spark | null = null;
@@ -168,8 +170,8 @@ export class RealmEvents {
   private start(kind: ParticleKind, at: number): void {
     this._eventsPlayed++;
     this.current = this.buildEvent(kind);
-    // 12 s base, nudged by a short repeating pattern so events are not metronomic.
-    const interval = 12 + ((this.index * 7) % 5) - 2;
+    // 20 s base, nudged by a short repeating pattern so events are not metronomic.
+    const interval = 20 + ((this.index * 7) % 5) - 2;
     this.index++;
     this.nextAt = at + interval;
   }
@@ -291,16 +293,12 @@ export class RealmEvents {
 
   private drawEvent(ctx: CanvasRenderingContext2D, ev: ArenaEvent, time: number): void {
     ctx.save();
+    ctx.globalAlpha = EVENT_INTENSITY;
     if (ev.kind === 'ember') {
-      if (ev.age < 0.6) {
-        ctx.globalAlpha = 0.16 * (1 - ev.age / 0.6);
-        ctx.fillStyle = '#ff8a3c';
-        ctx.fillRect(0, 0, 960, 540);
-      }
       ctx.globalCompositeOperation = 'lighter';
       for (const p of ev.particles) {
         const a = 0.55 + 0.35 * Math.sin(time * 7 + p.phase);
-        ctx.globalAlpha = Math.max(0.2, a);
+        ctx.globalAlpha = EVENT_INTENSITY * (Math.max(0.2, a));
         ctx.fillStyle = p.color;
         ctx.shadowBlur = 12;
         ctx.shadowColor = p.color;
@@ -310,15 +308,6 @@ export class RealmEvents {
       }
     } else if (ev.kind === 'snow') {
       const fade = ev.age > EVENT_DURATION - 0.4 ? Math.max(0, (EVENT_DURATION - ev.age) / 0.4) : 1;
-      if (ev.age < 0.7) {
-        // A cold flash that hangs at the top of the sky.
-        const sky = ctx.createLinearGradient(0, 0, 0, 540);
-        sky.addColorStop(0, `rgba(190,240,255,${0.34 * (1 - ev.age / 0.7)})`);
-        sky.addColorStop(0.6, `rgba(190,240,255,${0.08 * (1 - ev.age / 0.7)})`);
-        sky.addColorStop(1, 'rgba(190,240,255,0)');
-        ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, 960, 540);
-      }
       ctx.globalCompositeOperation = 'lighter';
       for (const p of ev.particles) {
         if (p.y > 900) continue;
@@ -328,7 +317,7 @@ export class RealmEvents {
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
         // Motion streak above the shard.
-        ctx.globalAlpha = 0.32 * fade;
+        ctx.globalAlpha = EVENT_INTENSITY * (0.32 * fade);
         const streak = ctx.createLinearGradient(0, -len * 3.2, 0, -len * 0.5);
         streak.addColorStop(0, 'rgba(159,232,255,0)');
         streak.addColorStop(1, 'rgba(200,245,255,0.9)');
@@ -339,7 +328,7 @@ export class RealmEvents {
         ctx.lineTo(0, -len * 0.5);
         ctx.stroke();
         // The crystal: a long faceted diamond, point down.
-        ctx.globalAlpha = 0.95 * fade;
+        ctx.globalAlpha = EVENT_INTENSITY * (0.95 * fade);
         const body = ctx.createLinearGradient(0, -len, 0, w);
         body.addColorStop(0, 'rgba(120,210,255,0.25)');
         body.addColorStop(0.7, p.color);
@@ -367,7 +356,7 @@ export class RealmEvents {
       for (const im of ev.impacts) {
         const t = im.age / 0.5;
         const a = (1 - t) * fade;
-        ctx.globalAlpha = a * 0.8;
+        ctx.globalAlpha = EVENT_INTENSITY * (a * 0.8);
         ctx.strokeStyle = '#d8f6ff';
         ctx.shadowBlur = 12;
         ctx.shadowColor = '#9fe8ff';
@@ -377,7 +366,7 @@ export class RealmEvents {
         ctx.stroke();
         // Four-ray glint.
         const r = im.size * (1.6 + 2.2 * (1 - Math.abs(t * 2 - 0.6)));
-        ctx.globalAlpha = a;
+        ctx.globalAlpha = EVENT_INTENSITY * (a);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.4;
         ctx.beginPath();
@@ -395,7 +384,7 @@ export class RealmEvents {
     } else if (ev.kind === 'spore') {
       ctx.globalCompositeOperation = 'lighter';
       if (ev.age < 0.9) {
-        ctx.globalAlpha = 0.5 * (1 - ev.age / 0.9);
+        ctx.globalAlpha = EVENT_INTENSITY * (0.5 * (1 - ev.age / 0.9));
         ctx.fillStyle = '#8dffc2';
         for (const puff of ev.puffs) {
           ctx.beginPath();
@@ -405,7 +394,7 @@ export class RealmEvents {
       }
       for (const p of ev.particles) {
         const life = Math.max(0, 1 - (p.originY - p.y) / 150);
-        ctx.globalAlpha = Math.min(1, life * 1.4) * 0.85;
+        ctx.globalAlpha = EVENT_INTENSITY * (Math.min(1, life * 1.4) * 0.85);
         ctx.fillStyle = p.color;
         ctx.shadowBlur = 10;
         ctx.shadowColor = '#6ef2b1';
@@ -436,7 +425,7 @@ export class RealmEvents {
       const x0 = Math.max(-20, crest - tail);
       const x1 = Math.min(980, crest + 2);
       if (x1 > x0) {
-        ctx.globalAlpha = fade;
+        ctx.globalAlpha = EVENT_INTENSITY * (fade);
         // Water body: deep teal at the floor, bright and clear near the crest.
         const body = ctx.createLinearGradient(crest - tail, 0, crest, 0);
         body.addColorStop(0, 'rgba(30,150,160,0)');
@@ -481,7 +470,7 @@ export class RealmEvents {
           const fx = crest - r * r * tail * 0.45 - 2;
           if (fx < x0 || fx > x1) continue;
           const lift = Math.sin(ev.age * 9 + i) * 3 + (1 - r) * 8;
-          ctx.globalAlpha = fade * (0.9 - r * 0.6);
+          ctx.globalAlpha = EVENT_INTENSITY * (fade * (0.9 - r * 0.6));
           ctx.beginPath();
           ctx.arc(fx, top(fx) - lift, 1.2 + (1 - r) * 2.4, 0, Math.PI * 2);
           ctx.fill();
@@ -489,7 +478,7 @@ export class RealmEvents {
         ctx.globalCompositeOperation = 'source-over';
       }
       for (const p of ev.particles) {
-        ctx.globalAlpha = 0.65 * fade;
+        ctx.globalAlpha = EVENT_INTENSITY * (0.65 * fade);
         ctx.strokeStyle = p.color;
         ctx.shadowBlur = 8;
         ctx.shadowColor = '#4fe0cf';
@@ -497,7 +486,7 @@ export class RealmEvents {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.globalAlpha = 0.5 * fade;
+        ctx.globalAlpha = EVENT_INTENSITY * (0.5 * fade);
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.arc(p.x - p.size * 0.35, p.y - p.size * 0.35, Math.max(0.6, p.size * 0.22), 0, Math.PI * 2);
@@ -509,15 +498,7 @@ export class RealmEvents {
       const cx = 480;
       const cy = 252;
       const half = 96 * (0.35 + 0.65 * ease);
-      // Dim the arena around the rift so it reads as light being swallowed.
-      ctx.globalAlpha = 0.28 * ease;
-      const dim = ctx.createRadialGradient(cx, cy, 40, cx, cy, 520);
-      dim.addColorStop(0, 'rgba(20,0,40,0)');
-      dim.addColorStop(1, 'rgba(10,0,24,1)');
-      ctx.fillStyle = dim;
-      ctx.fillRect(0, 0, 960, 540);
-
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = EVENT_INTENSITY * (1);
       ctx.globalCompositeOperation = 'lighter';
       const glow = ctx.createRadialGradient(cx, cy, 6, cx, cy, 200 * ease + 10);
       glow.addColorStop(0, 'rgba(160,100,255,0.55)');
@@ -543,7 +524,7 @@ export class RealmEvents {
           const y = cy + Math.sin(a) * r * 0.55;
           if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        ctx.globalAlpha = ease;
+        ctx.globalAlpha = EVENT_INTENSITY * (ease);
         ctx.stroke();
       }
 
@@ -566,7 +547,7 @@ export class RealmEvents {
       for (let i = right.length - 1; i >= 0; i--) tear.lineTo(right[i][0], right[i][1]);
       tear.closePath();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = Math.min(1, ease * 1.4);
+      ctx.globalAlpha = EVENT_INTENSITY * (Math.min(1, ease * 1.4));
       const inside = ctx.createRadialGradient(cx, cy, 2, cx, cy, half);
       inside.addColorStop(0, '#05000c');
       inside.addColorStop(0.7, '#1a0536');
@@ -578,11 +559,11 @@ export class RealmEvents {
       for (let i = 0; i < 7; i++) {
         const sx = cx + Math.sin(ev.seed + i * 3.7) * 9 * ease;
         const sy = cy + Math.cos(ev.seed + i * 5.3) * half * 0.7;
-        ctx.globalAlpha = ease * (0.4 + 0.4 * Math.sin(ev.age * 6 + i));
+        ctx.globalAlpha = EVENT_INTENSITY * (ease * (0.4 + 0.4 * Math.sin(ev.age * 6 + i)));
         ctx.fillRect(sx, sy, 1.6, 1.6);
       }
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = ease;
+      ctx.globalAlpha = EVENT_INTENSITY * (ease);
       ctx.strokeStyle = 'rgba(232,196,255,0.95)';
       ctx.shadowBlur = 22;
       ctx.shadowColor = '#a46bff';
@@ -620,7 +601,7 @@ export class RealmEvents {
       // Ash being drawn into the tear.
       for (const p of ev.particles) {
         const near = Math.min(1, p.radius / 60);
-        ctx.globalAlpha = 0.8 * ease * near;
+        ctx.globalAlpha = EVENT_INTENSITY * (0.8 * ease * near);
         ctx.fillStyle = p.color;
         ctx.shadowBlur = 9;
         ctx.shadowColor = '#8d5bff';
