@@ -87,6 +87,14 @@ Originals live in `art/units/<id>.png` (git-ignored) as 1024×1024 PNGs on a fla
 
 `docs/unit-art.md` holds the per-unit prompts, the shared style block and the framing rules.
 
+## Install & play offline
+
+- **Chrome / Edge / Android:** use the browser's **Install app** option (from the address bar or the menu).
+- **iOS:** open the site in Safari, tap **Share**, then **Add to Home Screen**.
+- After the first visit the whole game is cached, so it plays offline — including every image and font.
+- When a new version is deployed, a **Reload** toast appears (never during a battle). Reload when you are ready.
+- Saves stay in the browser's `localStorage`; they are not uploaded anywhere.
+
 ## Deployment
 
 Pushes to `main` (or `master`) build and deploy through `.github/workflows/deploy.yml`. In the repository settings, set **Pages → Source** to **GitHub Actions**. The Vite base is relative (`./`), so it works from a project subpath.

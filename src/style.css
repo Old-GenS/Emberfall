@@ -898,6 +898,29 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
 }
 @keyframes toastIn { from{opacity:0; transform:translate(-50%, 12px)} to{opacity:1; transform:translate(-50%,0)} }
 
+/* PWA update / offline toasts: fixed bottom centre, above every battle layer. */
+.pwa-toast {
+  position: fixed; left: 50%; bottom: calc(18px + var(--sab)); transform: translateX(-50%);
+  z-index: 200; box-sizing: border-box; width: min(520px, calc(100vw - 24px));
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
+  padding: 11px 12px; border-radius: 6px;
+  background: rgba(14, 10, 24, 0.97); border: 1px solid var(--gold);
+  box-shadow: 0 14px 44px rgba(0,0,0,.75); color: var(--gold-bright);
+  font-family: var(--display); font-size: 12.5px; letter-spacing: .04em;
+  animation: toastIn .3s ease both;
+}
+.pwa-toast-text { flex: 1 1 150px; min-width: 0; }
+.pwa-toast-action,
+.pwa-toast-close {
+  flex: 0 0 auto; font-family: var(--display); letter-spacing: .06em;
+  color: var(--gold-bright); background: rgba(233, 196, 106, 0.12);
+  border: 1px solid var(--line-strong); border-radius: 4px; cursor: pointer;
+  padding: 6px 12px; font-size: 11.5px; line-height: 1.2;
+}
+.pwa-toast-action:hover,
+.pwa-toast-close:hover { background: rgba(233, 196, 106, 0.22); border-color: var(--gold); }
+.pwa-toast-close { padding: 6px 9px; color: var(--muted); }
+
 /* ------------------------------- Responsive ------------------------------- */
 @media (max-width: 1060px) {
   .class-grid { grid-template-columns: repeat(2, 1fr); }

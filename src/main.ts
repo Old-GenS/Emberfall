@@ -16,6 +16,7 @@ import {
   renderTitle, renderVictory, toastHTML,
 } from './ui';
 import { initHovercard } from './hovercard';
+import { initPwa } from './pwa';
 
 const app = document.getElementById('app')!;
 /** Phones and tablets: wording and layout differ (see the (hover: none) rules in style.css). */
@@ -845,6 +846,7 @@ function boot(): void {
   loadSave();
   screen = 'title';
   renderScreen();
+  initPwa({ isBusy: () => screen === 'battle' });
 }
 
 boot();

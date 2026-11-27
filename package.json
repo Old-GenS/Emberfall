@@ -10,6 +10,8 @@
     "balance": "esbuild tools/balance/cli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/emberfall-balance/cli.mjs --log-level=warning && node node_modules/.cache/emberfall-balance/cli.mjs",
     "test": "npm run balance -- check",
     "sprites": "esbuild tools/sprite-sheet/entry.ts --bundle --format=iife --outfile=node_modules/.cache/sprite-sheet/bundle.js --log-level=warning && node tools/sprite-sheet/run.mjs",
+    "icons": "node tools/icon/make-icons.mjs",
+    "check:pwa": "npm run build && node tools/pwa-check.mjs",
     "check:hover": "npm run build && node tools/hovercard-check.mjs",
     "check:fx": "npm run build && node tools/battle-fx-check.mjs",
     "check:guard": "npm run build && node tools/guard-check.mjs",
@@ -25,6 +27,7 @@
     "playwright-core": "1.65.0",
     "sharp": "0.35.5",
     "typescript": "^5.6.3",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vite-plugin-pwa": "2.0.0"
   }
 }
