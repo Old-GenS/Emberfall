@@ -1,4 +1,5 @@
 import { enrageMultiplier, type Battle, type CombatEvent, type Unit } from './combat';
+import { BALANCE } from './balance';
 import { type ClassDef, type LocationDef } from './data';
 import type { RealmEvents } from './realm-events';
 import { drawFinishedUnit, drawGothicHalo, type UnitLight } from './sprites/index';
@@ -43,6 +44,7 @@ const IMPACT_BY_COLOR: Record<string, FxSpriteName> = {
 export const FX_SPRITES = [
   'fire-burst', 'slash', 'slash-heavy', 'frost-shatter', 'holy-flare', 'shadow-strike',
   'spirit-wisp', 'heal-bloom', 'shield-ring', 'crit-star', 'ult-explosion',
+  'parry-flash', 'danger-sigil', 'heavy-impact', 'daze',
 ] as const;
 export type FxSpriteName = (typeof FX_SPRITES)[number];
 const fxImages = new Map<string, HTMLImageElement>();
@@ -461,6 +463,38 @@ export class SceneRenderer {
         this.floaterAt(pos.x, pos.y - 142, 'VANQUISHED', '#cbbce6', 13);
         break;
       }
+      case 'guard': {
+        const pos = this.unitPosition(e.unit);
+        this.spawnFx('shield-ring', pos.x, pos.y - 78 * pos.scale, 150, { life: 0.35 });
+        break;
+      }
+      case 'heavy': {
+        const pos = this.unitPosition(e.target);
+        if (e.outcome === 'perfect') {
+          this.floaterAt(pos.x, pos.y - 154 * pos.scale - 36, 'PERFECT', '#ffe08a', 28);
+          this.spawnFx('parry-flash', pos.x + 26, pos.y - 84 * pos.scale, 240, { life: 0.5, grow: 0.6, spin: 0 });
+          this.spawnFx('holy-flare', pos.x, pos.y - 78 * pos.scale, 200, { life: 0.55, grow: 0.5 });
+          // Stars circle the staggered attacker for as long as the stagger lasts.
+          const sp = this.unitPosition(e.source);
+          this.spawnFx('daze', sp.x, sp.y - 168 * sp.scale, 120 * sp.scale, { life: BALANCE.guard.stagger, grow: 0.1, spin: 4, rot: 0 });
+          this.flash = Math.max(this.flash, 0.18);
+          this.flashColor = '255,224,138';
+          this.hitStop = Math.max(this.hitStop, 0.12);
+          this.ring(pos.x, pos.y - 74, '#ffe08a', 0.55, 84);
+        } else if (e.outcome === 'hit' && e.target.side === 'hero') {
+          this.shake = Math.max(this.shake, 14);
+          this.flash = Math.max(this.flash, 0.15);
+          this.flashColor = '255,70,60';
+          this.spawnFx('crit-star', pos.x, pos.y - 96 * pos.scale, 150 * pos.scale, { life: 0.36, grow: 0.5, rot: Math.random() * 0.6 });
+          this.spawnFx('heavy-impact', pos.x, pos.y - 30 * pos.scale, 300 * pos.scale, { life: 0.6, grow: 0.5, rot: 0, spin: 0 });
+        }
+        break;
+      }
+      case 'interrupt': {
+        const pos = this.unitPosition(e.source);
+        this.floaterAt(pos.x, pos.y - 142, 'INTERRUPTED', '#cbbce6', 14);
+        break;
+      }
       case 'end':
         this.flash = e.victory ? 0.28 : 0.22;
         this.flashColor = e.victory ? '255,220,150' : '180,35,55';
@@ -726,6 +760,7 @@ export class SceneRenderer {
     if (this.enrage > 1) {
       for (const u of sorted) if (u.alive && u.side === 'enemy') this.drawEnrageGlow(ctx, u);
     }
+    this.drawTelegraphs(ctx, battle);
     for (const u of sorted) this.drawUnit(ctx, u);
 
     // 6. Realm events play over the units and under the damage floaters.
@@ -850,6 +885,77 @@ export class SceneRenderer {
     ctx.fillStyle = glow;
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     ctx.restore();
+  }
+
+  private drawTelegraphs(ctx: CanvasRenderingContext2D, battle: Battle): void {
+    const hero = battle.hero;
+    for (const t of battle.telegraphs) {
+      const progress = Math.max(0, Math.min(1, 1 - t.remaining / Math.max(0.001, t.total)));
+      const pos = this.unitPosition(t.source);
+      const pulse = 0.8 + 0.2 * Math.sin(this.time * Math.PI * 2 * 2.6);
+      const alpha = (0.25 + 0.55 * progress) * pulse;
+      const r = 108 * pos.scale;
+      const cx = pos.x;
+      const cy = pos.y - 74 * pos.scale;
+      const glow = ctx.createRadialGradient(cx, cy, 6, cx, cy, r);
+      glow.addColorStop(0, `rgba(255,59,47,${alpha})`);
+      glow.addColorStop(0.55, `rgba(255,59,47,${alpha * 0.45})`);
+      glow.addColorStop(1, 'rgba(255,59,47,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+
+      // Red exclamation over the wind-up's source.
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.lineJoin = 'round';
+      ctx.font = '700 40px "Cinzel", "Palatino Linotype", Georgia, serif';
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#050309';
+      ctx.strokeText('!', pos.x, pos.y - 198 * pos.scale);
+      ctx.fillStyle = '#ff3b2f';
+      ctx.fillText('!', pos.x, pos.y - 198 * pos.scale);
+      ctx.restore();
+
+      // Timing ring at the hero's feet: the outer circle closes onto the fixed inner one.
+      if (hero.alive) {
+        const hp = this.unitPosition(hero);
+        const inWindow = t.remaining <= BALANCE.guard.window;
+        const color = inWindow ? '#ffd56a' : '#ff5a4a';
+        const outer = 130 - 82 * progress;
+        // The painted rune sigil is the closing ring, laid flat on the ground and turning slowly.
+        const sigil = getFxImage('danger-sigil');
+        if (sigil) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.55 + 0.45 * progress;
+          ctx.translate(hp.x, hp.y);
+          ctx.scale(1, 0.42);
+          ctx.rotate(this.time * 0.8);
+          const d = outer * 2.25;
+          ctx.drawImage(sigil, -d / 2, -d / 2, d, d);
+          ctx.restore();
+        }
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = color;
+        ctx.lineWidth = sigil ? 1.4 : 3.4;
+        ctx.globalAlpha = sigil && !inWindow ? 0.5 : 1;
+        ctx.beginPath();
+        ctx.ellipse(hp.x, hp.y, outer, outer * 0.42, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        if (inWindow) ctx.lineWidth = 4;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.ellipse(hp.x, hp.y, 48, 48 * 0.42, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
   }
 
   private drawEnrageVignette(ctx: CanvasRenderingContext2D): void {

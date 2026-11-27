@@ -9,5 +9,9 @@
   "heal-bloom": "heal-a",
   "shield-ring": "shield-a",
   "crit-star": "crit-a",
-  "ult-explosion": "ult-a"
+  "ult-explosion": "ult-a",
+  "parry-flash": "parry-b",
+  "danger-sigil": "sigil-b",
+  "heavy-impact": "heavy-a",
+  "daze": "daze-a"
 }

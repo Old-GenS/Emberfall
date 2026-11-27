@@ -1,6 +1,6 @@
 import {
   type AbilityDef, type BodyKind, type ClassId, type EnemyDef, type EnemyInstance,
-  type Stats, type StatusKind, classById,
+  type HeavyDef, type Stats, type StatusKind, classById,
 } from './data';
 import { BALANCE } from './balance';
 
@@ -39,6 +39,9 @@ export interface Unit {
   lifetime?: number;
   boss: boolean;
   scale: number;
+  heavy?: HeavyDef;
+  /** Seconds until this unit's heavy may start. Infinity when it has none. */
+  heavyCd: number;
   anim: { attack: number; hit: number; heal: number; spawn: number; cast: number };
   deadTime: number;
   lastStand?: boolean;
@@ -53,7 +56,13 @@ export type CombatEvent =
   | { type: 'death'; unit: Unit }
   | { type: 'summon'; unit: Unit }
   | { type: 'message'; text: string; tone: 'info' | 'good' | 'bad' | 'epic' }
+  | { type: 'telegraph'; id: number; source: Unit; heavy: HeavyDef; duration: number }
+  | { type: 'heavy'; source: Unit; target: Unit; heavy: HeavyDef; outcome: 'perfect' | 'guarded' | 'hit' }
+  | { type: 'interrupt'; source: Unit; heavy: HeavyDef }
+  | { type: 'guard'; unit: Unit }
   | { type: 'end'; victory: boolean; time: number };
+
+export interface Telegraph { id: number; source: Unit; heavy: HeavyDef; remaining: number; total: number }
 
 let nextUid = 1;
 
@@ -71,6 +80,7 @@ function baseUnit(partial: Partial<Unit> & Pick<Unit, 'side' | 'name' | 'body' |
     isSummon: false,
     boss: false,
     scale: 1,
+    heavyCd: Infinity,
     anim: { attack: 0, hit: 0, heal: 0, spawn: 0, cast: 0 },
     deadTime: 0,
     ...partial,
@@ -119,6 +129,8 @@ export function makeEnemyUnit(inst: EnemyInstance, stage: number): Unit {
     abilityCds: def.abilities.map((_, i) => BALANCE.enemy.firstCast + i * BALANCE.enemy.castStagger),
     boss: !!def.boss,
     scale: def.scale ?? 1,
+    heavy: def.heavy,
+    heavyCd: def.heavy ? def.heavy.first : Infinity,
   });
 }
 
@@ -131,6 +143,11 @@ const CLEANSABLE: StatusKind[] = ['burn', 'poison', 'bleed', 'stun', 'slow'];
 
 /** Damage variance, tick lengths and the summon's stats are mechanics, not tuning knobs. */
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+/** Used by `forceTelegraph` on an enemy that has no heavy of its own (debug and browser checks). */
+const TEST_HEAVY: HeavyDef = {
+  id: 'test-heavy', name: 'Heavy Blow', desc: '', power: 2, windup: 1.4, cooldown: 8, first: 0, target: 'enemy',
+};
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 export class Battle {
@@ -144,6 +161,12 @@ export class Battle {
   victory = false;
   onEvent: (e: CombatEvent) => void;
   chargeRate = 1;
+  telegraphs: Telegraph[] = [];
+  guardCd = 0;
+  guardActive = 0;
+  guardStats = { presses: 0, perfect: 0, guarded: 0, heavyTaken: 0, interrupted: 0 };
+  private nextTelegraphId = 1;
+  private guardedThisPress = false;
   private wolfCooldownPrevent = false;
   private enrageAnnounced = false;
   /** Battle time at which the next ultimate may be cast (see BALANCE.ultimate.minInterval). */
@@ -165,6 +188,111 @@ export class Battle {
 
   get elapsed(): number { return this.time; }
 
+  get guardReady(): boolean { return !this.ended && this.hero.alive && this.guardCd <= 0; }
+
+  /** Open the guard window. False when it is still cooling down or the battle is over. */
+  useGuard(): boolean {
+    if (!this.guardReady) return false;
+    this.guardActive = BALANCE.guard.window;
+    this.guardCd = BALANCE.guard.cooldown;
+    this.guardedThisPress = false;
+    this.guardStats.presses++;
+    this.emit({ type: 'guard', unit: this.hero });
+    return true;
+  }
+
+  /** Start a heavy wind-up right now. Debug and browser-check helper. */
+  forceTelegraph(source?: Unit): boolean {
+    if (this.ended) return false;
+    const unit = source ?? this.enemies.find(e => e.alive);
+    if (!unit || !unit.alive) return false;
+    if (this.telegraphs.some(t => t.source === unit)) return false;
+    this.startTelegraph(unit, unit.heavy ?? TEST_HEAVY);
+    return true;
+  }
+
+  private startTelegraph(source: Unit, heavy: HeavyDef): Telegraph {
+    const t: Telegraph = { id: this.nextTelegraphId++, source, heavy, remaining: heavy.windup, total: heavy.windup };
+    this.telegraphs.push(t);
+    this.emit({ type: 'telegraph', id: t.id, source, heavy, duration: heavy.windup });
+    return t;
+  }
+
+  private isStunned(u: Unit): boolean {
+    return u.effects.some(e => e.kind === 'stun');
+  }
+
+  /** Cooldowns, wind-ups, interrupts and impacts for every heavy attack, once per update. */
+  private updateHeavies(dt: number): void {
+    for (const u of this.enemies) {
+      if (!u.alive || !u.heavy) continue;
+      if (this.telegraphs.some(t => t.source === u)) continue;
+      if (this.isStunned(u)) continue;
+      u.heavyCd -= dt;
+      if (u.heavyCd <= 0) this.startTelegraph(u, u.heavy);
+    }
+    for (const t of [...this.telegraphs]) {
+      if (!t.source.alive) { this.telegraphs = this.telegraphs.filter(x => x !== t); continue; }
+      if (this.isStunned(t.source)) {
+        this.telegraphs = this.telegraphs.filter(x => x !== t);
+        this.guardStats.interrupted++;
+        this.emit({ type: 'interrupt', source: t.source, heavy: t.heavy });
+        t.source.heavyCd = t.heavy.cooldown * 0.5;
+        continue;
+      }
+      t.remaining -= dt;
+    }
+    for (const t of [...this.telegraphs]) {
+      if (t.remaining <= 0) {
+        this.telegraphs = this.telegraphs.filter(x => x !== t);
+        this.impactHeavy(t);
+      }
+    }
+  }
+
+  private impactHeavy(t: Telegraph): void {
+    const source = t.source;
+    source.heavyCd = t.heavy.cooldown;
+    const targets = t.heavy.target === 'allEnemies' ? [this.hero, ...this.allies] : [this.hero];
+    let countedHit = false;
+    for (const target of targets) {
+      if (!target.alive) continue;
+      const perfect = target === this.hero && this.guardActive > 0;
+      const outcome = perfect ? 'perfect' : 'hit';
+      this.emit({ type: 'heavy', source, target, heavy: t.heavy, outcome });
+      let raw = source.stats.atk * this.atkMult(source) * t.heavy.power * rand(0.95, 1.05);
+      if (perfect) raw *= BALANCE.guard.perfectTaken;
+      this.dealDamage(source, target, raw, {
+        crit: false, kind: 'ability', ability: t.heavy.name, unavoidable: true, heavy: true,
+      });
+      if (perfect) {
+        this.grantUltCharge(BALANCE.guard.perfectUlt);
+        // Pushed directly: a perfect guard's stagger is not a class ability and must not be
+        // shortened by bossStunFactor.
+        source.effects.push({ kind: 'stun', remaining: BALANCE.guard.stagger, power: 1, tick: 0 });
+        const guard = classById(this.hero.classId!).guard;
+        if (guard.bonus === 'shield') {
+          this.addShield(this.hero, this.hero.stats.maxHp * BALANCE.guard.bonusShield);
+        } else if (guard.bonus === 'heal') {
+          this.heal(this.hero, this.hero, this.hero.stats.maxHp * BALANCE.guard.bonusHeal, true);
+        } else if (guard.bonus === 'counter') {
+          this.dealDamage(this.hero, source, this.hero.stats.atk * BALANCE.guard.bonusCounter, {
+            crit: true, forceCrit: true, kind: 'attack',
+          });
+        } else if (guard.bonus === 'burn') {
+          this.applyStatus(source, {
+            kind: 'burn', duration: BALANCE.guard.bonusBurnDuration,
+            power: this.hero.stats.atk * BALANCE.guard.bonusBurnPower,
+          }, this.hero);
+        }
+        this.guardStats.perfect++;
+      } else if (target === this.hero && !countedHit) {
+        countedHit = true;
+        this.guardStats.heavyTaken++;
+      }
+    }
+  }
+
   /** Add ultimate charge from an outside source (realm-event sparks). */
   grantUltCharge(amount: number): void {
     if (this.ended || !this.hero.alive) return;
@@ -184,6 +312,9 @@ export class Battle {
       return;
     }
     this.time += dt;
+    this.guardCd = Math.max(0, this.guardCd - dt);
+    this.guardActive = Math.max(0, this.guardActive - dt);
+    this.updateHeavies(dt);
     if (!this.enrageAnnounced && this.time > BALANCE.combat.enrageAt) {
       this.enrageAnnounced = true;
       this.emit({ type: 'message', text: 'The air ignites — all damage increases!', tone: 'epic' });
@@ -266,6 +397,9 @@ export class Battle {
     for (let i = 0; i < u.abilityCds.length; i++) u.abilityCds[i] = Math.max(0, u.abilityCds[i] - dt);
 
     if (stunned) return;
+
+    // A winding-up unit neither attacks nor casts; its attack timer is frozen.
+    if (this.telegraphs.some(t => t.source === u)) return;
 
     // decide action
     const interval = this.attackInterval(u);
@@ -456,11 +590,11 @@ export class Battle {
 
   dealDamage(
     source: Unit, target: Unit, raw: number,
-    opts: { crit: boolean; kind: 'attack' | 'ability' | 'ult' | 'thorns'; ability?: string; forceCrit?: boolean; noLifesteal?: boolean },
+    opts: { crit: boolean; kind: 'attack' | 'ability' | 'ult' | 'thorns'; ability?: string; forceCrit?: boolean; noLifesteal?: boolean; unavoidable?: boolean; heavy?: boolean },
   ): number {
     if (!target.alive) return 0;
     // dodge
-    if (Math.random() < this.dodgeOf(target)) {
+    if (!opts.unavoidable && Math.random() < this.dodgeOf(target)) {
       this.emit({ type: 'dodge', target });
       return 0;
     }
@@ -481,6 +615,17 @@ export class Battle {
     // mitigate away, which is what makes a long boss fight a risk for the Warden rather than a grind.
     dmg *= enrageMultiplier(this.time);
     dmg *= 1 - target.stats.damageReduction;
+    // A guard halves any ordinary hit; a heavy that lands inside the window is handled by its own
+    // outcome, so it skips this path (see impactHeavy).
+    const guardedHit = !opts.heavy && target.side === 'hero' && this.guardActive > 0
+      && (opts.kind === 'attack' || opts.kind === 'ability' || opts.kind === 'thorns');
+    if (guardedHit) {
+      dmg *= BALANCE.guard.guardTaken;
+      if (!this.guardedThisPress) {
+        this.guardedThisPress = true;
+        this.guardStats.guarded++;
+      }
+    }
     dmg = Math.max(1, dmg);
     if (target.shield > 0) {
       const absorbed = Math.min(target.shield, dmg);

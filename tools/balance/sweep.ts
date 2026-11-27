@@ -85,12 +85,12 @@ export function sweep(o: Opts): void {
       const perClass = classes.map((c) => summarize(tier.id, c, runs.filter((r) => r.classId === c)));
       rows.push([
         tier.id, ...combo.map(String), pc(all.completionPct), `${perClass.map((c) => c.firstTryBossPct.toFixed(0)).join('/')}`, `${perClass.map((c) => c.firstTryNormalPct.toFixed(0)).join('/')}`,
-        f1(all.meanRetries), all.walled, pc(all.ultReadyNormalPct), pc(all.ultReadyBossPct), `${perClass.map((c) => c.normalDur.toFixed(0)).join('/')}`, `${perClass.map((c) => c.bossDur.toFixed(0)).join('/')}`,
+        f1(all.meanRetries), all.walled, pc(all.ultReadyNormalPct), pc(all.ultReadyBossPct), `${perClass.map((c) => c.hpLeftNormalPct.toFixed(0)).join('/')}`, `${perClass.map((c) => c.normalDur.toFixed(0)).join('/')}`, `${perClass.map((c) => c.bossDur.toFixed(0)).join('/')}`,
       ]);
     }
   }
   console.log(`\nSweep ${sets.map((s) => `${s.path} (currently ${JSON.stringify(describePath(s.path))})`).join(' × ')} — ${seeds.length} seed(s) per class, ${tiers.map((t) => t.id).join(', ')} tier\n`);
-  console.log(table(['Tier', ...sets.map((s) => s.path), 'Done', 'Boss 1st', 'Norm 1st', 'Retries', 'Walled', 'Ult≥1 N', 'Ult≥1 B', 'Norm dur', 'Boss dur'], rows));
+  console.log(table(['Tier', ...sets.map((s) => s.path), 'Done', 'Boss 1st', 'Norm 1st', 'Retries', 'Walled', 'Ult≥1 N', 'Ult≥1 B', 'HP N', 'Norm dur', 'Boss dur'], rows));
   console.log('\n(per-class cells are warden/pyromancer/shadowblade/spiritcaller · see `npm run balance -- report` for the column meanings)');
   console.log('A sweep proposes; a person decides. To apply a value: edit src/balance.ts, run `npm test`, update docs/balance.md.\n');
 }

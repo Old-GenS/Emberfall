@@ -323,6 +323,14 @@ export function renderBattle(info: BattleUIInfo): string {
           ${abilityEls}
           <div class="ability-meta">Reliquary<b>Skills cast on cooldown</b></div>
         </div>
+        <div class="guard-wrap" id="guard-wrap">
+          <button class="guard-btn" id="guard-btn" data-tip="skill:${cls.id}:guard" aria-label="${cls.guard.name}">
+            ${icon(cls.guard.icon)}
+            <svg class="charge-ring" viewBox="0 0 68 68"><circle id="guard-ring" cx="34" cy="34" r="32" stroke-dasharray="201" stroke-dashoffset="0"/></svg>
+            <span class="key" aria-hidden="true">F</span>
+          </button>
+          <div class="guard-info"><span class="k">✦ Guard</span><b>${cls.guard.name}</b></div>
+        </div>
         <div class="ult-wrap" id="ult-wrap">
           <button class="ult-btn" id="ult-btn" title="Release your ultimate when charged" aria-label="Ultimate">
             ${icon(cls.ultimate.icon)}
@@ -418,6 +426,7 @@ export function howToHTML(): string {
       <ul>
         <li>Basic strikes and skills fire automatically on cooldown.</li>
         <li>Dealing and enduring blows kindles your <b>Ultimate Arcana</b>. When the medallion blazes gold, click it or press <span class="kbd">Space</span>.</li>
+        <li>When a foe glows red and a ring closes on you, press <b>Guard</b> (F or Shift) as the ring turns gold. A perfect guard staggers it and charges your ultimate.</li>
         <li>Keys <span class="kbd">1</span>–<span class="kbd">3</span> also trigger the Ultimate; <span class="kbd">Esc</span> pauses; the speed toggle accelerates combat to <b>2×</b>.</li>
       </ul>
       <div class="modal-close"><button class="btn primary" data-close-modal="1">Seal the Codex</button></div>

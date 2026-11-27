@@ -297,9 +297,7 @@ function showBattleHint(): void {
   updateSave({ seenIntro: true });
   const arena = document.getElementById('arena');
   if (!arena) return;
-  arena.insertAdjacentHTML('beforeend', `<div class="hint-banner" id="hint-banner">${icon('heart')}<span>${touch
-    ? 'Your skills fire automatically. When the ultimate glows, <b>tap it</b>. Good luck.'
-    : 'Your skills fire automatically. When the ultimate glows, press it — or hit <b>Space</b>. Good luck.'}</span></div>`);
+  arena.insertAdjacentHTML('beforeend', `<div class="hint-banner" id="hint-banner">${icon('heart')}<span>Skills fire on their own. Press <b>Guard</b> (F) as a red ring closes on you, and your <b>Ultimate</b> (Space) when it glows.</span></div>`);
   setTimeout(() => document.getElementById('hint-banner')?.remove(), 7500);
 }
 
@@ -316,6 +314,19 @@ function bindBattleControls(): void {
     sfx('click');
   });
   document.getElementById('ult-btn')?.addEventListener('click', useUltimate);
+  // pointerdown, not click: a guard has to open the instant the player presses.
+  document.getElementById('guard-btn')?.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    useGuard();
+  });
+}
+
+function useGuard(): void {
+  if (!battle || battle.ended || paused) return;
+  if (battle.useGuard()) {
+    sfx('shield');
+    updateHud();
+  }
 }
 
 function useUltimate(): void {
@@ -383,6 +394,21 @@ function handleEvent(e: CombatEvent): void {
     case 'death':
       sfx('death');
       if (e.unit.side === 'enemy') addLog(`${e.unit.name} falls`);
+      break;
+    case 'telegraph':
+      sfx('boss');
+      addLog(`<b>${e.source.name}</b> winds up <b>${e.heavy.name}</b>!`);
+      break;
+    case 'heavy':
+      if (e.outcome === 'perfect') {
+        sfx('crit');
+        addLog('Perfect guard!');
+      } else if (e.outcome === 'hit') {
+        sfx('hit');
+      }
+      break;
+    case 'interrupt':
+      addLog(`${e.source.name}'s ${e.heavy.name} is broken!`);
       break;
     case 'end':
       handleBattleEnd(e.victory);
@@ -538,6 +564,15 @@ function updateHud(): void {
     ultWrap?.classList.toggle('ready', ready);
     ultPct.textContent = ready ? (touch ? 'Ready · tap to release' : 'Ready · press Space') : `Charging · ${pct}%`;
     ultRing.style.strokeDashoffset = `${201 * (1 - pct / 100)}`;
+  }
+  const guardBtn = document.getElementById('guard-btn');
+  const guardRing = document.getElementById('guard-ring') as SVGCircleElement | null;
+  if (guardBtn) {
+    const ready = battle.guardReady;
+    guardBtn.classList.toggle('ready', ready);
+    guardBtn.classList.toggle('cooling', !ready);
+    guardBtn.classList.toggle('alert', ready && battle.telegraphs.length > 0);
+    if (guardRing) guardRing.style.strokeDashoffset = `${201 * battle.guardCd / BALANCE.guard.cooldown}`;
   }
   for (let i = 0; i < hero.abilities.length; i++) {
     const cd = hero.abilityCds[i] ?? 0;
@@ -768,6 +803,11 @@ document.addEventListener('keydown', (ev) => {
     if (screen === 'battle') togglePause();
   }
   if (screen !== 'battle' || !battle || paused || modalOpen) return;
+  if (ev.key === 'f' || ev.key === 'F' || ev.code === 'ShiftLeft' || ev.code === 'ShiftRight') {
+    ev.preventDefault();
+    useGuard();
+    return;
+  }
   if (ev.code === 'Space' || ev.key === '1' || ev.key === '2' || ev.key === '3') {
     ev.preventDefault();
     useUltimate();

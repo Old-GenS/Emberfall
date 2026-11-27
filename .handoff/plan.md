@@ -1,130 +1,295 @@
 ## Goal
 
-Make long battles less passive with three changes. None of them changes combat balance.
+Give the player a real in-combat decision. Two halves:
 
-1. **Visible enrage.** After 30 s of battle time, damage already ramps up (`BALANCE.combat.enrageAt` / `enrageRamp`), but nothing shows it. Add four things:
-   - a banner;
-   - a red vignette that deepens as enrage grows;
-   - a red glow on enemies and bigger damage numbers;
-   - more intense music and an `×1.4`-style enrage chip in the battle controls.
-2. **Battle speed** cycles 1× → 2× → 3× → 1× and is remembered in the save, instead of resetting to 1× every fight.
-3. **Realm events.** About every 12 s of battle time, a realm-flavoured visual event plays (Ember Rain, Spore Bloom, Shardfall, Tide Surge, Void Rift) and leaves a glowing **spark** in the arena. Clicking or tapping the spark gives +15 ultimate charge. The events are visual only; the spark is the one gameplay effect, and only for players who tap it.
+1. **Telegraphed heavy attacks.** Every boss and every realm's large "elite" enemy has one heavy attack. It winds up visibly for about 1.5 s of battle time, then lands hard. A stun during the wind-up interrupts it.
+2. **Guard.** Each class gets a second player-controlled button (beside the ultimate), on a short cooldown. Pressing it opens a short guard window:
+   - A heavy attack that lands inside the window is a **perfect guard**: almost no damage, ultimate charge, the attacker is staggered, and a class-specific bonus applies.
+   - Any other hit inside the window is halved.
+   - Mistimed or skipped, the heavy attack lands in full.
+
+Then re-tune the balance so that bosses are winnable by playing well, rather than by grinding Rally. Normal fights should cost real health.
 
 ## Files to touch
 
-- `src/combat.ts`: `enrageMultiplier()`, public `elapsed`, `grantUltCharge()`
-- `src/state.ts`: `battleSpeed` in the save
-- `src/realm-events.ts`: new, event scheduling, visuals, the spark and hit-testing
-- `src/art.ts`: enrage visuals, drawing the realm events, `toDesign` / `toClient` coordinate helpers
-- `src/main.ts`: speed cycling and persistence, enrage music and chip, the realm-events lifecycle, tap handling, the `?debug=1` hook
-- `src/ui.ts`: enrage chip markup in the battle controls
-- `src/style.css`: enrage chip style, pointer cursor over a spark
-- `tools/battle-fx-check.mjs`: new, automated browser check
-- `package.json`: add script `check:fx`
+Workstream A (combat and balance):
+- `src/data.ts`: `HeavyDef`, `GuardDef`, `EnemyDef.heavy`, `ClassDef.guard`, data for 5 bosses + 5 elites + 4 classes
+- `src/balance.ts`: `guard` section, `logic: 2`, re-tuned numbers
+- `src/combat.ts`: wind-up/telegraph state, interrupt, guard, new events, debug helpers
+- `tools/balance/bots.ts`, `tools/balance/run.ts`, `tools/balance/check.ts`: guard policies, new metric and targets
+- `docs/balance.md`: Status config id, a section on the guard mechanic and new targets, results
+
+Workstream B (UI and visuals):
+- `src/ui.ts`: guard button, intro and how-to text
+- `src/main.ts`: guard input (button, keys), HUD state, sfx and log for the new events
+- `src/art.ts`: telegraph visuals, guard and perfect-guard visuals
+- `src/style.css`: guard button styles (desktop and phone)
+- `src/hovercard.ts`: `skill:<classId>:guard` content
+- `tools/guard-check.mjs`: new browser check
+- `package.json`: script `check:guard`
 
 ## Steps
 
-1. Run `npm ci`.
+### 0. Setup (lead, before delegating)
 
-2. **`src/combat.ts`:**
-   - Export `enrageMultiplier(time: number): number`, which returns `time > BALANCE.combat.enrageAt ? 1 + (time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp : 1`. Make the existing damage line (`if (this.time > BALANCE.combat.enrageAt) dmg *= …`) use it, so the behaviour is identical.
-   - Add to `Battle` a public getter `elapsed` (returns `this.time`).
-   - Add a public `grantUltCharge(amount: number): void`, which adds `amount` to the hero's `ultCharge`, clamped to 0–100. It does nothing if the battle has ended or the hero is dead.
-   - Change nothing else in combat.
+Run `npm ci`. Then implement **section A1 (data types) and A2 (combat API)** yourself, exactly as below, and run `npx tsc --noEmit -p .` (it must pass) **before** delegating anything. Both workstreams build on this API.
 
-3. **`src/state.ts`:** add `battleSpeed: 1 | 2 | 3` to `SaveData`, defaulting to 1. `loadSave` keeps it when it's 1, 2 or 3, otherwise uses 1. `resetSave` keeps it, like the audio settings.
+### A1. Data (`src/data.ts`)
 
-4. **Speed (`src/main.ts`):**
-   - `startBattle` and the restart path set `speed = getSave().battleSpeed` instead of `speed = 1`.
-   - The speed button cycles 1 → 2 → 3 → 1 and saves `battleSpeed`. Its label is `${speed}×`, and its `active` class is on when `speed > 1`.
-   - The initial label rendered by `src/ui.ts` shows the saved speed.
+```ts
+export interface HeavyDef {
+  id: string; name: string; desc: string;
+  power: number;     // damage = attacker atk × power
+  windup: number;    // seconds of battle time from telegraph to impact
+  cooldown: number;  // seconds between heavies (counted from impact or interrupt)
+  first: number;     // seconds into the battle before the first heavy may start
+  target: 'enemy' | 'allEnemies';
+}
+export interface GuardDef {
+  id: string; name: string; desc: string; icon: IconName;
+  bonus: 'shield' | 'burn' | 'counter' | 'heal';
+}
+```
 
-5. **Enrage:**
-   - **`src/art.ts`:** `SceneRenderer` computes `m = enrageMultiplier(battle.elapsed)` each frame.
-     - When `m` first exceeds 1 in a battle, record `enrageStartedAt` (a public field, `null` until then; reset when a new battle starts) and play a canvas banner centred in the arena: `THE VALE GROWS RESTLESS` (display font, 34 px, `#ffd2a6` with a dark stroke), with `All damage rises every second` under it (16 px). Fade in 0.3 s, hold 2 s, fade out 0.6 s.
-     - While `m > 1`:
-       - draw a red edge vignette over the arena (radial gradient, transparent centre, `rgba(255,40,30,a)` at the edges, `a = min(0.42, (m - 1) * 0.25)`, pulsing ±15% at 1.2 Hz);
-       - draw a red glow (`#ff3b2f`, alpha `min(0.5, (m - 1) * 0.3)`) behind each living enemy, before the unit;
-       - scale the font of damage floaters created while enraged by `min(1.6, 1 + (m - 1) * 0.35)`.
-   - **`src/ui.ts`:** in the battle controls, before the pause button, add `<div class="wave-chip enrage-chip" id="enrage-chip" hidden>${icon('flame')} <span id="enrage-mult">×1.0</span></div>`.
-   - **`src/main.ts`:** in `updateHud`, when `enrageMultiplier(battle.elapsed) > 1`, show `#enrage-chip` and set `#enrage-mult` to `×{m.toFixed(1)}`. When enrage first starts in a battle, call `audio.playMusic(themeForBattle(), true)` once.
-   - **`src/style.css`:** `.enrage-chip` has a red tint (border `rgba(255,80,60,.6)`, colour `#ffb59a`) and a gentle pulse, with no animation under `prefers-reduced-motion`.
+- Add `heavy?: HeavyDef` to `EnemyDef`.
+- Add `guard: GuardDef` to `ClassDef`.
+- Each class's `icon` must be an `IconName` that already exists. Use one the class already uses (passive, ability or ultimate icon).
 
-6. **Realm events (`src/realm-events.ts`):**
-   - Export `class RealmEvents` with:
-     - `constructor(kind: ParticleKind, accent: string)`;
-     - `update(dt: number, battle: Battle)`, where `dt` is battle time;
-     - `draw(ctx: CanvasRenderingContext2D, time: number)`, in design coordinates (960×540);
-     - `hit(x: number, y: number): boolean`, in design coordinates;
-     - `forceEvent(kind?: ParticleKind): void`;
-     - read-only `spark: { x: number; y: number; age: number } | null`;
-     - read-only `eventsPlayed: number`.
-   - **Schedule:** the first event at 10 s of battle time, then every `12 + ((index * 7) % 5) - 2` seconds. Nothing is scheduled once `battle.ended`.
-   - **Event visuals.** Each lasts 2.5 s, uses `Math.random` freely (visual only), and shows its name as small top-centre canvas text (display font, 18 px, `#f3e2c0`, fading over 1.6 s):
-     - `ember`: **Ember Rain**. 40 glowing embers fall diagonally across the arena, with a brief warm sky flash.
-     - `spore`: **Spore Bloom**. Six glowing puffs burst from random points along the floor (y ≈ 430–470), with spores drifting up.
-     - `snow`: **Shardfall**. Ice shards fall vertically with light streaks, with a brief cold flash.
-     - `bubble`: **Tide Surge**. A translucent teal wave band sweeps left to right across the floor, with rising bubbles.
-     - `ash`: **Void Rift**. A purple tear opens mid-air near the centre, with swirling ash, and closes after 2.5 s.
-   - **Spark:**
-     - At an event's end, if there's no spark, spawn one at a random point with x in [300, 660] and y in [300, 420].
-     - It's drawn as a pulsing orb in `accent` with a soft halo and a small 4-point star, bobbing ±4 px.
-     - It lasts 5 s, fading over the last 1 s. At most one at a time.
-     - `hit(x, y)` returns true (and collects the spark) when the point is within 34 design px of it. Collecting plays a burst ring and a `+15 Ultimate` floating text drawn by `RealmEvents`.
+Class guards:
 
-7. **Wiring (`src/art.ts` and `src/main.ts`):**
-   - `SceneRenderer` gets `setRealmEvents(ev: RealmEvents | null)` and draws `ev.draw(ctx, this.time)` after the units and before the floaters, inside the design transform.
-   - It also gets `toDesign(clientX, clientY): { x, y }` and `toClient(x, y): { x, y }`. Both use the same `s`, `ox` and `oy` as `draw`, accounting for the canvas's device-pixel scale and its bounding rect.
-   - In `startBattle`, create `new RealmEvents(location.particle, location.palette.accent)`, hand it to the renderer, and reset it on restart.
-   - In the loop, advance it with the same battle-time steps as `battle.update`, and only when the battle is not paused, no modal is open and the battle hasn't ended.
-   - On `pointerdown` on the arena canvas, convert to design coordinates. If `realmEvents.hit` returns true: call `battle.grantUltCharge(15)`, play `audio.sfx('heal')` and call `ev.preventDefault()`. Do nothing while paused.
-   - On `pointermove`, set the canvas cursor to `pointer` when within 34 px of a spark, otherwise reset it.
+| class | id | name | bonus | desc |
+|---|---|---|---|---|
+| warden | `bulwark` | Bulwark | `shield` | Raise your shield. Blocks half of any hit; time it to a heavy blow to stagger the foe and gain a ward. |
+| pyromancer | `blink` | Blink | `burn` | Step through flame. Halves any hit; time it to a heavy blow to stagger the foe and set it ablaze. |
+| shadowblade | `riposte` | Riposte | `counter` | Parry. Halves any hit; time it to a heavy blow to stagger the foe and strike back with a critical blow. |
+| spiritcaller | `spirit-ward` | Spirit Ward | `heal` | Call a spirit shield. Halves any hit; time it to a heavy blow to stagger the foe and mend your wounds. |
 
-8. **Debug hook (`src/main.ts`):** when `location.search` contains `debug=1`, keep `window.__emberfall = { battle, renderer, realmEvents, audio }` up to date at every battle start. Nothing else changes in debug mode.
+Heavies (starting numbers; workstream A tunes them):
 
-9. **`tools/battle-fx-check.mjs`** (Node ESM, `playwright-core`, Node built-ins otherwise):
-   - Serve `dist/` with a `node:http` static server on an ephemeral port.
-   - Launch Chromium headless with `args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required']` and `executablePath` set to `process.env.CHROMIUM_PATH` or the first that exists of `/usr/lib64/chromium-browser/chromium-browser`, `/usr/bin/chromium-browser`, `/usr/bin/chromium`. The viewport is 1280×800.
-   - Collect page errors throughout. Open `/?debug=1`, click `[data-nav="classes"]`, click `[data-choose="warden"]` and wait 1200 ms. Then print `PASS`/`FAIL` with a detail for each check:
-     1. **Speed cycles:** clicking `#speed-btn` three times gives the labels `2×`, `3×`, `1×` in turn.
-     2. **Speed persists:** set it to `3×` (two clicks), reload `/?debug=1`, click `[data-nav="map"]`, then the first `.btn[data-battle]`, and wait 1200 ms. `#speed-btn` reads `3×`. Set it back to `1×` with one click.
-     3. **No enrage before 30 s:** `#enrage-chip` is hidden and `__emberfall.renderer.enrageStartedAt === null`.
-     4. **Enrage shows:** set `__emberfall.battle.time = 36` and wait 600 ms. `#enrage-chip` is visible, `#enrage-mult` matches `/^×1\.[0-9]$/`, `enrageStartedAt !== null`, and `__emberfall.audio.intensity === true`. Save a screenshot of the arena to `sprite-out/fx-enrage.png`.
-     5. **Events play:** for each kind in `['ember', 'spore', 'snow', 'bubble', 'ash']`, call `__emberfall.realmEvents.forceEvent(kind)`, wait 1200 ms, screenshot the arena to `sprite-out/fx-<kind>.png`, and wait another 1600 ms. Afterwards `eventsPlayed >= 5` and no page errors occurred.
-     6. **A spark appears:** after check 5, `realmEvents.spark` is not null (force one more event and wait 2700 ms if needed).
-     7. **A miss doesn't collect:** read `battle.hero.ultCharge`, then click the arena at the point that `renderer.toClient` gives for a design point 150 px left of the spark. The spark still exists.
-     8. **Collecting a spark:** set `battle.hero.ultCharge = 10`, then click at `renderer.toClient(spark.x, spark.y)`. Within 300 ms the spark is null and `ultCharge >= 24`.
-     9. **No page errors** over the whole run.
-   - Print `battle-fx-check: N/N pass` last and exit 1 on any failure. Always close the browser and the server.
+| enemy id | heavy id | name | power | windup | cooldown | first | target |
+|---|---|---|---|---|---|---|---|
+| molten-warden | `eruption` | Eruption | 3.0 | 1.5 | 9 | 6 | enemy |
+| pale-stag | `stampede` | Moonlit Stampede | 2.8 | 1.4 | 8.5 | 6 | enemy |
+| winters-herald | `glacial-spear` | Glacial Spear | 3.0 | 1.4 | 9 | 6 | enemy |
+| leviathan-eye | `tidal-crush` | Tidal Crush | 3.2 | 1.5 | 9 | 6 | allEnemies |
+| ashen-king | `kings-judgment` | King's Judgment | 4.0 | 1.6 | 10 | 7 | enemy |
+| magma-brute | `overhead-smash` | Overhead Smash | 2.6 | 1.6 | 11 | 5 | enemy |
+| hollow-treant | `crushing-bough` | Crushing Bough | 2.6 | 1.6 | 11 | 5 | enemy |
+| ice-golem | `glacier-fist` | Glacier Fist | 2.6 | 1.6 | 11 | 5 | enemy |
+| coral-sentinel | `shell-crash` | Shell Crash | 2.6 | 1.6 | 11 | 5 | enemy |
+| dusk-wyrm | `tail-sweep` | Tail Sweep | 2.6 | 1.6 | 11 | 5 | enemy |
 
-10. Add the script `"check:fx": "npm run build && node tools/battle-fx-check.mjs"` to `package.json`.
+Give each a short flavour `desc` in the style of the existing enemy abilities.
+
+### A2. Combat API (`src/combat.ts`)
+
+Add `BALANCE.guard` to `src/balance.ts` (starting values; A tunes them):
+
+```ts
+guard: {
+  window: 0.6,        // seconds the guard stays up after the press
+  cooldown: 4,        // seconds between presses
+  guardTaken: 0.5,    // damage multiplier for non-heavy hits while guarding
+  perfectTaken: 0.1,  // damage multiplier for a heavy that lands while guarding
+  perfectUlt: 20,     // ultimate charge for a perfect guard
+  stagger: 1.4,       // stun on the attacker after a perfect guard (NOT reduced by bossStunFactor)
+  bonusShield: 0.1,   // warden: shield of maxHp × this
+  bonusHeal: 0.08,    // spiritcaller: heal maxHp × this
+  bonusCounter: 1.5,  // shadowblade: counter-hit of atk × this, forced crit
+  bonusBurnDuration: 3, bonusBurnPower: 0.25, // pyromancer: burn of atk × power per second
+},
+```
+
+Set `BALANCE.logic` to `2`.
+
+New public members on `Battle`:
+
+```ts
+export interface Telegraph { id: number; source: Unit; heavy: HeavyDef; remaining: number; total: number }
+telegraphs: Telegraph[];      // active wind-ups, read every frame by the renderer and the bots
+guardCd: number;              // seconds until guard can be pressed again (0 = ready)
+guardActive: number;          // seconds of guard window left (0 = not guarding)
+get guardReady(): boolean;    // !ended && hero alive && guardCd <= 0
+guardStats: { presses: number; perfect: number; guarded: number; heavyTaken: number; interrupted: number };
+useGuard(): boolean;          // false if not ready; else guardActive = window, guardCd = cooldown, presses++, emit 'guard'
+forceTelegraph(source?: Unit): boolean; // debug/check helper, see below
+```
+
+New `CombatEvent` members:
+
+```ts
+| { type: 'telegraph'; id: number; source: Unit; heavy: HeavyDef; duration: number }
+| { type: 'heavy'; source: Unit; target: Unit; heavy: HeavyDef; outcome: 'perfect' | 'guarded' | 'hit' }
+| { type: 'interrupt'; source: Unit; heavy: HeavyDef }
+| { type: 'guard'; unit: Unit }
+```
+
+Behaviour:
+- `Unit` gains `heavyCd: number`, set at creation to `def.heavy.first` for enemies with a heavy, `Infinity` otherwise. `makeEnemyUnit` needs the def's heavy, so store `heavy?: HeavyDef` on `Unit` too.
+- **Each update, for a living enemy with a heavy that is not stunned and not winding up:**
+  - decrease `heavyCd`;
+  - when it reaches ≤ 0, push a telegraph (`remaining = total = heavy.windup`, ids from a counter starting at 1) and emit `telegraph`.
+- **While a unit has an active telegraph, it neither basic-attacks nor casts.** Its `attackTimer` does not run down.
+- Each update, decrease every telegraph's `remaining`.
+- **Interrupt:** if the source is stunned or dead, remove the telegraph. Emit `interrupt` (stunned only), increment `guardStats.interrupted`, and set `heavyCd = heavy.cooldown * 0.5`.
+- **Impact:** when `remaining <= 0`, remove the telegraph and set `heavyCd = heavy.cooldown`. Targets are the hero (`enemy`), or hero and allies (`allEnemies`). For each living target:
+  - The outcome is `perfect` if the target is the hero and `guardActive > 0`, otherwise `hit`. Allies always take `hit`.
+  - Emit `heavy` with the outcome before dealing damage.
+  - Deal `source.atk × atkMult × heavy.power × rand(0.95, 1.05)` through `dealDamage`, with `kind: 'ability'` and `ability: heavy.name`. It cannot be dodged (add an `unavoidable` option to `dealDamage` that skips the dodge roll).
+  - For `perfect`, multiply the damage by `perfectTaken`, then:
+    - give `perfectUlt` charge through `grantUltCharge`;
+    - stun the source for `guard.stagger`, pushed directly so `bossStunFactor` does not shrink it;
+    - apply the class bonus: shield via `addShield`; heal via `heal(..., true)`; counter via `dealDamage(hero, source, atk × bonusCounter, { crit: true, forceCrit: true, kind: 'attack' })`; burn via `applyStatus`;
+    - increment `perfect`.
+  - For `hit` on the hero, increment `heavyTaken`.
+  - Only one guard result per impact: an `allEnemies` heavy counts once.
+- **Non-heavy hits** (`attack` / `ability` / `thorns`) on the hero while `guardActive > 0` are multiplied by `guardTaken`. Emit nothing extra, but increment `guarded` once per guard press (not once per hit).
+- `guardCd` and `guardActive` count down each update. Stop at 0.
+- `forceTelegraph(source?)`: start a telegraph now on `source`, or on the first living enemy. If that unit has no heavy, use `{ id: 'test-heavy', name: 'Heavy Blow', desc: '', power: 2, windup: 1.4, cooldown: 8, first: 0, target: 'enemy' }`. Return false if the battle has ended or there is no living enemy, or the unit is already winding up.
+- Damage, abilities and everything else in combat stay as they are.
+
+### Workstream A — balance and tooling (after step 0)
+
+1. **Bots (`tools/balance/bots.ts`):**
+   - Add `export type GuardPolicy = 'never' | 'sloppy' | 'perfect'` and a `guard` field on `Tier`.
+   - Set `idle: never`, `casual: never`, `regular: sloppy`, `sharp: perfect`, and update the blurbs and the header comment. There are now four decisions: class, boon, ultimate, guard.
+   - Remove "(the UI has a "Skip Boon" button)": the game has a reroll now and no skip. Keep the idle tier's `skip` policy as the floor.
+2. **Simulator (`tools/balance/run.ts` `fight`):**
+   - Each step, for every telegraph not decided yet, decide once:
+     - `perfect`: press when `remaining <= BALANCE.guard.window * 0.6`.
+     - `sloppy`: with probability 0.65 (`Math.random`, already seeded) behave like `perfect`; otherwise never press for that telegraph.
+   - Press with `b.useGuard()`.
+   - Record `hpLeftPct` (hero hp / maxHp at the end, 0 on a loss) and `perfect` / `heavyTaken` on `FightRec`.
+3. **Targets (`tools/balance/check.ts`):**
+   - Update the `ult-available` / `ult-matters` reasoning text. The ultimate is no longer the only decision.
+   - Add:
+     - `guard-matters`: boss first-try for Regular is ≥ 12 points above Casual (class mean).
+     - `normal-teeth`: Regular's mean `hpLeftPct` after won first-try normal fights is 35–85%, for each class. Normal fights should cost health.
+   - Add any summary fields needed to `summarize` in `run.ts`.
+4. **Tune** with `npm run balance -- sweep` / `report` / `check`. All targets must pass, including the existing `boss-retry` and `parity`, which fail today.
+   - You may change values in `src/balance.ts`.
+   - You may change the `power` / `windup` / `cooldown` / `first` of heavies in `src/data.ts`, and the enemy `hp` / `atk` of bosses and elites only.
+   - Do not change hero classes, abilities, boons or the targets' thresholds.
+   - Prefer few, explainable changes.
+5. **Doc (`docs/balance.md`):**
+   - Add a section describing the guard and heavy mechanic, the guard policies and the two new targets.
+   - Record what you changed while tuning and why, one line each.
+   - Update the Status section to the date 2026-11-26 and the config id that `npm test` prints, and refresh any results tables it contains from a fresh `npm run balance -- report`.
+6. Acceptance for A: `npm test` exits 0 and prints `all` … `targets pass`.
+
+### Workstream B — UI, visuals, input (after step 0)
+
+1. **Guard button (`src/ui.ts` `renderBattle`):**
+   - In `.arena-bottom`, immediately before `.ult-wrap`, add:
+
+     ```html
+     <div class="guard-wrap" id="guard-wrap">
+       <button class="guard-btn" id="guard-btn" data-tip="skill:${cls.id}:guard" aria-label="${cls.guard.name}">
+         ${icon(cls.guard.icon)}
+         <svg class="charge-ring" viewBox="0 0 68 68"><circle id="guard-ring" cx="34" cy="34" r="32" stroke-dasharray="201" stroke-dashoffset="0"/></svg>
+         <span class="key" aria-hidden="true">F</span>
+       </button>
+       <div class="guard-info"><span class="k">✦ Guard</span><b>${cls.guard.name}</b></div>
+     </div>
+     ```
+
+   - The how-to list gains one line: "When a foe glows red and a ring closes on you, press **Guard** (F or Shift) as the ring turns gold. A perfect guard staggers it and charges your ultimate."
+   - The battle intro hint in `src/main.ts` becomes: "Skills fire on their own. Press **Guard** (F) as a red ring closes on you, and your **Ultimate** (Space) when it glows."
+2. **Input (`src/main.ts`):**
+   - `pointerdown` on `#guard-btn` calls `useGuard()` and `ev.preventDefault()` (not `click`, for responsiveness).
+   - Keys `f`, `F`, `ShiftLeft`, `ShiftRight` call it during a battle (same guards as the ultimate: not paused, no modal).
+   - `useGuard()` calls `battle.useGuard()`; on success, `sfx('shield')`.
+3. **HUD (`updateHud`):**
+   - `#guard-btn` gets `ready` when `battle.guardReady` and `cooling` otherwise.
+   - The ring's dashoffset is `201 × guardCd / BALANCE.guard.cooldown`.
+   - `alert` is set when `battle.telegraphs.length > 0` and the guard is ready.
+4. **Events (`src/main.ts` `onEvent`):**
+   - `telegraph`: `sfx('boss')` and a log line `<b>{source}</b> winds up <b>{heavy}</b>!`.
+   - `heavy` perfect: `sfx('crit')` and log `Perfect guard!`.
+   - `heavy` hit: `sfx('hit')`.
+   - `interrupt`: log `{source}'s {heavy} is broken!`.
+   - Forward every event to the renderer as now.
+5. **Visuals (`src/art.ts`):**
+   - Every frame, for each `battle.telegraphs` entry:
+     - Pulse a red glow (`#ff3b2f`) behind the source, alpha `0.25 + 0.55 × progress` (progress = 1 − remaining/total). Use the same technique as `drawEnrageGlow`, faster pulse.
+     - Draw a red `!` (display font, 40 px, dark stroke) above the source.
+     - Around the hero, draw a timing ring: a fixed inner circle of radius 48 and an outer circle that shrinks from radius 130 to 48 as progress goes 0→1, both as ground-plane ellipses (y radius × 0.42) at the hero's feet. They are red (`#ff5a4a`) while `remaining > BALANCE.guard.window`, gold (`#ffd56a`) inside the window.
+   - `guard` event: `spawnFx('shield-ring', …)` on the hero, small (size 150, life 0.35).
+   - `heavy` perfect: a floater `PERFECT` (`#ffe08a`, 28 px) over the hero, `spawnFx('holy-flare', …)` size 220, gold flash 0.18, `hitStop = max(hitStop, 0.12)`, plus a `ring`.
+   - `heavy` hit on the hero: shake 14, red flash 0.15 (`flashColor '255,70,60'`), `spawnFx('crit-star', …)`.
+   - `interrupt`: floater `INTERRUPTED` (`#cbbce6`) over the source.
+6. **Styles (`src/style.css`):**
+   - `.guard-wrap` / `.guard-btn` mirror `.ult-wrap` / `.ult-btn` sizing, with a steel-blue/silver look instead of gold.
+   - `.ready` is bright and `.cooling` is dimmed.
+   - `.alert` pulses red-gold (no animation under `prefers-reduced-motion`).
+   - At 390 px viewport width, the arena-bottom row must not cause horizontal page scroll: hide `.guard-info` and `.ult-info` text if needed.
+7. **Hover card (`src/hovercard.ts`):** `skill:<classId>:guard` shows the guard's name, the kicker `Guard · F`, the class `desc`, and one line naming the perfect-guard bonus.
+8. **`tools/guard-check.mjs`** uses the same setup as `tools/battle-fx-check.mjs`: static server on `dist/`, Chromium, 1280×800, `?debug=1`, page errors collected, choose `warden`, wait 1200 ms. Then print PASS/FAIL per check:
+   1. `#guard-btn` exists with `data-tip="skill:warden:guard"` and has class `ready`.
+   2. **Telegraph shows:** `__emberfall.battle.forceTelegraph()` returns true. Within 300 ms `battle.telegraphs.length === 1`. Save a screenshot of the arena to `sprite-out/guard-telegraph.png` and check `#guard-btn` has class `alert`.
+   3. **Perfect guard:**
+      - Record `ultCharge`.
+      - Poll until `telegraphs[0].remaining <= 0.3`, then press key `f`.
+      - Wait 800 ms. Then `guardStats.perfect === 1`, `ultCharge` rose by ≥ 15 (or is 100), and the source has a `stun` effect or `guardStats.perfect` was counted.
+      - Save `sprite-out/guard-perfect.png`.
+   4. **Cooldown:** immediately after, `battle.useGuard()` returns false and `#guard-btn` has class `cooling`.
+   5. **Unguarded heavy:** set `battle.guardCd = 0`, `forceTelegraph()` (on the next living enemy if the first is stunned), do not press, wait `total + 0.8 s` real time. `guardStats.heavyTaken === 1`.
+   6. **Early press whiffs:** `guardCd = 0`, `forceTelegraph()`, press `f` at once (remaining > 1 s), wait for the impact. `heavyTaken === 2` and `perfect === 1`.
+   7. **Interrupt:** `forceTelegraph()`, then push a stun onto the source with `source.effects.push({ kind: 'stun', remaining: 1, power: 1, tick: 0 })`. Within 300 ms the telegraph is gone and `guardStats.interrupted >= 1`.
+   8. **Phone layout:** a new page at 390×844, the same flow to a battle. `document.documentElement.scrollWidth <= innerWidth` and `#guard-btn` and `#ult-btn` are both visible (non-zero bounding boxes inside the viewport).
+   9. **No page errors.**
+
+   Keep the battle alive throughout: before each step, set the hero's hp to max and every enemy's hp to max, so nothing dies mid-check. Print `guard-check: N/N pass` last; exit 1 on any failure. Always close the browser and the server.
+9. `package.json`: `"check:guard": "npm run build && node tools/guard-check.mjs"`.
+10. Acceptance for B: `npm run check:guard` ends `guard-check: 9/9 pass`.
+
+### Integration (lead, after both workstreams)
+
+Run every Acceptance command, fix anything that fails, and write the report.
 
 ## Acceptance
 
+- `npx tsc --noEmit -p .` exits 0.
+- `npm test` exits 0 and prints `all` and `targets pass` on one line.
+- `npm run check:guard` exits 0 and its last line is `guard-check: 9/9 pass`.
 - `npm run check:fx` exits 0 and its last line is `battle-fx-check: 9/9 pass`.
 - `npm run check:hover` exits 0 and its last line is `hovercard-check: 8/8 pass`.
 - `npm run sprites` exits 0 and its last line is `sprites: 25/25 pass`.
-- `npm test` prints `2 of 11 targets fail:` listing exactly `boss-retry` and `parity` (balance unchanged).
-- `test -f sprite-out/fx-enrage.png && test -f sprite-out/fx-ember.png && test -f sprite-out/fx-ash.png` exits 0.
+- `test -f sprite-out/guard-telegraph.png && test -f sprite-out/guard-perfect.png` exits 0.
 
 ## Parallel work
 
-None — do it sequentially.
+- **Lead first:** step 0 (`npm ci`, A1, A2, `npx tsc --noEmit -p .` passes). Do not delegate before this is done.
+- **Workstream A, balance:**
+  - owns `src/balance.ts`, `src/data.ts` (numbers only after step 0), `tools/balance/*`, `docs/balance.md`;
+  - must not touch `src/combat.ts` except to fix a bug in the step-0 code, and must say so in its summary;
+  - its acceptance is `npm test` exits 0.
+- **Workstream B, UI:**
+  - owns `src/ui.ts`, `src/main.ts`, `src/art.ts`, `src/style.css`, `src/hovercard.ts`, `tools/guard-check.mjs`, `package.json`;
+  - uses the step-0 API as written and does not edit `src/combat.ts`, `src/data.ts` or `src/balance.ts`;
+  - its acceptance is `npm run check:guard` ends `9/9 pass`.
+- **Lead, integration:** after both finish, run the full Acceptance list.
 
 ## Constraints
 
 - Do not commit, push, or switch branches.
 - A step may touch a file outside **Files to touch** when it has to. List every such file in the report under "outside the plan", one line each saying why.
-- The only checks to run are the **Acceptance** commands. Do not write or run extra end-to-end tests. The check scripts' own static servers are the only servers allowed; do not start a dev server. If something outside Acceptance fails, note it in the report and finish.
-- No balance changes: don't change `src/balance.ts`, `src/data.ts`, enemy or hero numbers, or any combat rule beyond the three additions in step 2. Realm events deal no damage and apply no status.
-- Do not change the sprites, unit art, hover card or audio menu.
+- The only checks to run are the Acceptance commands, plus `npm run balance -- report|sweep|scaling` for tuning in workstream A. Do not write or run extra end-to-end tests, and do not start a dev server; the check scripts' own static servers are the only servers allowed. If something outside Acceptance fails, note it in the report and finish.
+- Do not change hero classes' stats, abilities or ultimates, the boons, the balance target thresholds, the painted unit art, `tools/units/*`, `src/sprites/*` or `src/realm-events.ts`.
+- The battle-speed button, enrage, realm events and sparks, hit-stop and painted effects keep working as they do.
+- The guard must never be pressed automatically in the game. Only the balance bots press it.
 
 ## Out of scope
 
-- Boss telegraphs or new boss mechanics, combo counters, slow motion or screen shake changes.
-- Changes to tools/balance or the balance targets.
+- Making skills manual or an Auto toggle.
+- New enemies, new boss phases, new art or sounds (use the existing `audio.sfx` names: hit, crit, slash, fire, ice, heal, shield, dodge, death, cast, ult, summon, victory, defeat, levelup, click, back, boss, select).
+- Changes to the map, reward screen or save format, beyond what `ClassDef.guard` needs.
 
 ## If blocked
 
+- If all balance targets cannot pass after a reasonable sweep (about 40 minutes of tuning):
+  - stop tuning and keep the best configuration found;
+  - make sure `guard-matters` and `normal-teeth` pass if at all possible;
+  - record the measured table in `docs/balance.md` and the report, and name which targets still fail and the closest values tried.
 - If Chromium will not launch, try `dnf install -y chromium` once. If it still fails, stop and report.
-- If `battle.time` cannot be set from the page because the build renames or freezes it, add the smallest debug-only setter on the `window.__emberfall` object and report it.
+- If a teammate or subagent tool is unavailable, do workstream A then workstream B yourself, in that order, and say so in the report.

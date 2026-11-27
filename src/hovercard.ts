@@ -1,6 +1,7 @@
 import {
   BOONS, classById, type AbilityDef, type BoonDef, type ClassDef, type ClassId, type IconName, type StatusSpec,
 } from './data';
+import { BALANCE } from './balance';
 import { icon } from './ui';
 
 const GAP = 10;
@@ -79,10 +80,28 @@ function abilityCard(ability: AbilityDef, typeLine: string): string {
     <div class="hc-facts">${abilityFacts(ability)}</div>`;
 }
 
+function perfectGuardBonus(cls: ClassDef): string {
+  switch (cls.guard.bonus) {
+    case 'shield':
+      return `Gain a ward worth ${Math.round(BALANCE.guard.bonusShield * 100)}% max HP and stagger the attacker.`;
+    case 'burn':
+      return `Set the attacker ablaze for ${BALANCE.guard.bonusBurnDuration}s and stagger it.`;
+    case 'counter':
+      return `Strike back for ${Math.round(BALANCE.guard.bonusCounter * 100)}% ATK (always crits) and stagger the attacker.`;
+    case 'heal':
+      return `Mend ${Math.round(BALANCE.guard.bonusHeal * 100)}% max HP and stagger the attacker.`;
+  }
+}
+
 function skillContent(cls: ClassDef, index: string): string | null {
   if (index === 'passive') {
     return `${header(cls.passive.icon, cls.passive.name, 'Passive · always active')}
       <p class="hc-desc">${esc(cls.passive.desc)}</p>`;
+  }
+  if (index === 'guard') {
+    return `${header(cls.guard.icon, cls.guard.name, 'Guard · F')}
+      <p class="hc-desc">${esc(cls.guard.desc)}</p>
+      <div class="hc-facts">${fact('Perfect guard', perfectGuardBonus(cls))}</div>`;
   }
   if (index === 'ult') return abilityCard(cls.ultimate, 'Ultimate · charges in combat');
   const i = Number(index);

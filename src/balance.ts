@@ -14,12 +14,12 @@ export const BALANCE = {
    * (src/combat.ts, src/state.ts, the battle flow in src/main.ts). The doc's config id covers logic
    * as well as numbers, so a logic fix still marks docs/balance.md as out of date.
    */
-  logic: 1,
+  logic: 2,
   /** Enemy waves. `stage` runs 0..24; five stages per realm, the fifth is the boss. */
   enemy: {
     hpPerStage: 0.155,                       // normal enemies: HP × (1 + stage × this)
     bossHpPerStage: 0.24,                    // bosses: HP × (1 + stage × this)
-    atkPerStage: 0.115,                      // normal enemies: ATK × (1 + stage × this)
+    atkPerStage: 0.5,                     // normal enemies: ATK × (1 + stage × this)
     bossAtkPerStage: 0.45,                    // bosses: ATK × (1 + stage × this)
     escortAtkPerStage: 0.12,                 // the enemies that accompany a boss
     escortHp: 0.8, escortHpStep: 0.08,       // escorts: HP × (this + index × step)
@@ -45,8 +45,21 @@ export const BALANCE = {
   /** Ultimate charge: passive per second, plus this share of damage dealt and of damage taken. 100 = Ready.
  *  `minInterval` is a floor on the gap between two casts, whatever the charge rate. */
   ultimate: { passiveCharge: 2, chargeDealt: 0.3, chargeTaken: 0.05, minInterval: 5 },
+  /** Guard: a short player-controlled window. A heavy that lands inside it is a perfect guard. */
+  guard: {
+    window: 0.6,        // seconds the guard stays up after the press
+    cooldown: 4,        // seconds between presses
+    guardTaken: 0.5,    // damage multiplier for non-heavy hits while guarding
+    perfectTaken: 0.1,  // damage multiplier for a heavy that lands while guarding
+    perfectUlt: 20,     // ultimate charge for a perfect guard
+    stagger: 1.4,       // stun on the attacker after a perfect guard (NOT reduced by bossStunFactor)
+    bonusShield: 0.04,    // warden: shield of maxHp × this
+    bonusHeal: 0.06,    // spiritcaller: heal maxHp × this
+    bonusCounter: 3,  // shadowblade: counter-hit of atk × this, forced crit
+    bonusBurnDuration: 4, bonusBurnPower: 0.8, // pyromancer: burn of atk × power per second
+  },
   combat: {
-    enrageAt: 30, enrageRamp: 0.08,          // after this many seconds, all damage grows by ramp per second
+    enrageAt: 30, enrageRamp: 0.12,          // after this many seconds, all damage grows by ramp per second
     bossStunFactor: 0.55,                    // stuns last this share of their time on a boss
     pyroUltStun: 0.9, pyroBurnDuration: 3, pyroBurnPower: 0.12,   // Pyromancer: her meteor stuns; basic attacks burn
     shadowbladeCritBonus: 0.25,              // Shadowblade: extra critical damage (Lethality)

@@ -4,9 +4,10 @@
  *
  * The targets say what kind of game Emberfall is meant to be, in numbers. They come from the
  * README's own claims ("a relaxed, readable auto-battler", "bosses occasionally require a retry",
- * "retry a stage as many times as you like") and from the fact that the ultimate is the only
- * decision the player makes in combat. If a change breaks one, either the change went too far or
- * the target needs to move — and moving a target is a person's decision, written down in the doc.
+ * "retry a stage as many times as you like") and from the two decisions the player makes in combat
+ * — when to fire the ultimate and when to guard a telegraphed heavy. If a change breaks one, either
+ * the change went too far or the target needs to move — and moving a target is a person's decision,
+ * written down in the doc.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -45,16 +46,21 @@ export function evaluateTargets(x: Matrix): Verdict[] {
     perClass((c) => `${m(x, R, c).completionPct.toFixed(0)}%`), every((c) => m(x, R, c).completionPct >= 95));
   add('boss-retry', 'Bosses occasionally need a retry', '"Bosses occasionally require a retry": above 90% they never do, below 50% the boss is a wall.', 'first-try 50–90%, each class',
     perClass((c) => `${m(x, R, c).firstTryBossPct.toFixed(0)}%`), every((c) => m(x, R, c).firstTryBossPct >= 50 && m(x, R, c).firstTryBossPct <= 90));
-  add('normal-smooth', 'Normal stages flow', 'Retries belong to bosses; a normal stage that has to be replayed is a chore in a game with no in-combat control.', 'first-try ≥ 90%, each class',
+  add('normal-smooth', 'Normal stages flow', 'Retries belong to bosses; a normal stage that has to be replayed is a chore, even with the guard.', 'first-try ≥ 90%, each class',
     perClass((c) => `${m(x, R, c).firstTryNormalPct.toFixed(0)}%`), every((c) => m(x, R, c).firstTryNormalPct >= 90));
+  add('normal-teeth', 'Normal fights cost real health', 'A normal stage that never dents the hero’s health is a formality, and a heavy you can ignore is not a decision. Winning should still hurt.', 'lowest health in a won first-try normal fight: mean 35–85%, each class',
+    perClass((c) => `${m(x, R, c).hpLeftNormalPct.toFixed(0)}%`), every((c) => m(x, R, c).hpLeftNormalPct >= 35 && m(x, R, c).hpLeftNormalPct <= 85));
   const walls = [...x.values()].flatMap((cm) => [...cm.values()].filter((r) => r.walled > 0).map((r) => `${r.tier}/${r.classId}:${r.walled}`));
   add('no-wall', 'Nobody gets stuck', '"Retry a stage as many times as you like" and no way to drop a boon: a stage the Rally bonus cannot carry a player through means abandoning the run.', '0 walled runs, every tier',
     walls.length ? walls.join(' · ') : 'none', walls.length === 0);
-  add('ult-available', 'The ultimate is there to be used', 'It is the one in-combat decision. A button that never glows is not a decision.', 'Ready in ≥ 75% of normal and ≥ 95% of boss fights, each class',
+  add('ult-available', 'The ultimate is there to be used', 'It is one of the two in-combat decisions (the other is the guard). A button that never glows is not a decision.', 'Ready in ≥ 75% of normal and ≥ 95% of boss fights, each class',
     perClass((c) => `${m(x, R, c).ultReadyNormalPct.toFixed(0)}%/${m(x, R, c).ultReadyBossPct.toFixed(0)}%`), every((c) => m(x, R, c).ultReadyNormalPct >= 75 && m(x, R, c).ultReadyBossPct >= 95));
   const matters = mean(CLASSES.map((c) => m(x, R, c.id).firstTryBossPct - m(x, C, c.id).firstTryBossPct));
-  add('ult-matters', 'Pressing it changes something', 'If never touching the ultimate changes no outcome, the decision is decorative.', 'boss first-try ≥ 8 points above Casual, class mean',
+  add('ult-matters', 'Pressing it changes something', 'If never touching the ultimate changes no outcome, the ultimate is no decision. The guard is measured separately below.', 'boss first-try ≥ 8 points above Casual, class mean',
     `${matters.toFixed(1)} points`, matters >= 8);
+  const guards = mean(CLASSES.map((c) => m(x, R, c.id).firstTryBossPct - m(x, C, c.id).firstTryBossPct));
+  add('guard-matters', 'Guarding a heavy changes something', 'A telegraphed heavy is the guard\'s whole reason to exist: a player who catches most of them must beat bosses more often than one who never presses.', 'boss first-try ≥ 12 points above Casual, class mean',
+    `${guards.toFixed(1)} points`, guards >= 12);
   const idle = [...x.keys()].includes(I);
   if (idle) {
     const idleR = mean(CLASSES.map((c) => m(x, I, c.id).meanRetries)); const regR = mean(CLASSES.map((c) => m(x, R, c.id).meanRetries));

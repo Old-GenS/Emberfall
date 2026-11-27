@@ -1,12 +1,14 @@
 /**
- * The bots: what a player decides in Emberfall, reduced to policies. There are only three decisions
- * in this game — the class, which boon to take, and when to release the ultimate — so a "tier" is
- * a (boon policy, ultimate policy) pair. Tiers are meant to be recognisable kinds of player:
+ * The bots: what a player decides in Emberfall, reduced to policies. There are four decisions in
+ * this game — the class, which boon to take, when to release the ultimate, and when to guard — so
+ * a "tier" is a (boon policy, ultimate policy, guard policy) triple. Tiers are meant to be
+ * recognisable kinds of player:
  *
- *   Idle    skips every boon and never touches the ultimate     (the UI has a "Skip Boon" button)
- *   Casual  takes whatever boon, never notices the ultimate
- *   Regular takes whatever boon, fires the ultimate as soon as it glows
- *   Sharp   picks the boon that fits the class, holds the ultimate for the moment it matters
+ *   Idle    skips every boon, never touches the ultimate, never guards
+ *   Casual  takes whatever boon, never notices the ultimate or the guard
+ *   Regular takes whatever boon, fires the ultimate as soon as it glows, guards a heavy sloppily
+ *   Sharp   picks the boon that fits the class, holds the ultimate for the moment it matters, and
+ *           guards every heavy at the last moment
  *
  * The scripted bots in drumline's balance.md are the model: simple rules, so a thinking player
  * should do at least as well as Sharp.
@@ -15,20 +17,23 @@ import { BOONS, classById, type BoonDef, type ClassId, type Stats } from '../../
 
 export type UltPolicy = 'never' | 'asap' | 'smart';
 export type BoonPolicy = 'skip' | 'random' | 'best';
+/** `sloppy` commits to the right timing with probability 0.65 and otherwise never presses for that telegraph. */
+export type GuardPolicy = 'never' | 'sloppy' | 'perfect';
 
 export interface Tier {
   id: string;
   label: string;
   boons: BoonPolicy;
   ult: UltPolicy;
+  guard: GuardPolicy;
   blurb: string;
 }
 
 export const TIERS: Tier[] = [
-  { id: 'idle', label: 'Idle', boons: 'skip', ult: 'never', blurb: 'Skips every boon, never uses the ultimate. The floor: if this wins, nothing the player does matters.' },
-  { id: 'casual', label: 'Casual', boons: 'random', ult: 'never', blurb: 'Takes a random boon, never notices the ultimate button.' },
-  { id: 'regular', label: 'Regular', boons: 'random', ult: 'asap', blurb: 'Takes a random boon, presses the ultimate the moment it is ready.' },
-  { id: 'sharp', label: 'Sharp', boons: 'best', ult: 'smart', blurb: 'Picks the boon that fits its class, holds the ultimate for a boss, a pack, or low health.' },
+  { id: 'idle', label: 'Idle', boons: 'skip', ult: 'never', guard: 'never', blurb: 'Skips every boon, never uses the ultimate, never guards. The floor: if this wins, nothing the player does matters.' },
+  { id: 'casual', label: 'Casual', boons: 'random', ult: 'never', guard: 'never', blurb: 'Takes a random boon, never notices the ultimate button or the guard.' },
+  { id: 'regular', label: 'Regular', boons: 'random', ult: 'asap', guard: 'sloppy', blurb: 'Takes a random boon, presses the ultimate the moment it is ready, and catches most heavies with a sloppy guard.' },
+  { id: 'sharp', label: 'Sharp', boons: 'best', ult: 'smart', guard: 'perfect', blurb: 'Picks the boon that fits its class, holds the ultimate for a boss, a pack, or low health, and times every guard.' },
 ];
 
 /* --------------------------------- ultimate -------------------------------- */

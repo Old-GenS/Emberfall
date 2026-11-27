@@ -12,6 +12,7 @@
     "sprites": "esbuild tools/sprite-sheet/entry.ts --bundle --format=iife --outfile=node_modules/.cache/sprite-sheet/bundle.js --log-level=warning && node tools/sprite-sheet/run.mjs",
     "check:hover": "npm run build && node tools/hovercard-check.mjs",
     "check:fx": "npm run build && node tools/battle-fx-check.mjs",
+    "check:guard": "npm run build && node tools/guard-check.mjs",
     "units:prepare": "esbuild tools/units/prepare.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/units/prepare.mjs --log-level=warning && node node_modules/.cache/units/prepare.mjs",
     "units:fixture": "esbuild tools/units/fixture.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/units/fixture.mjs --log-level=warning && node node_modules/.cache/units/fixture.mjs",
     "units:test": "npm run -s units:fixture -- /tmp/units-raw && npm run -s units:prepare -- --in /tmp/units-raw --out /tmp/units-out && echo '{\"shadowblade\":{\"hueKey\":false}}' > /tmp/units-noopts.json && npm run -s units:prepare -- --in /tmp/units-raw --out /tmp/units-noflip --options /tmp/units-noopts.json && node tools/units/check-units.mjs /tmp/units-out /tmp/units-noflip && UNITS_DIR=/tmp/units-out npm run -s sprites -- --painted",

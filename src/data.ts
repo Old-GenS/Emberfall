@@ -52,6 +52,20 @@ export interface AbilityDef {
   summon?: boolean;
 }
 
+export interface HeavyDef {
+  id: string; name: string; desc: string;
+  power: number;     // damage = attacker atk × power
+  windup: number;    // seconds of battle time from telegraph to impact
+  cooldown: number;  // seconds between heavies (counted from impact or interrupt)
+  first: number;     // seconds into the battle before the first heavy may start
+  target: 'enemy' | 'allEnemies';
+}
+
+export interface GuardDef {
+  id: string; name: string; desc: string; icon: IconName;
+  bonus: 'shield' | 'burn' | 'counter' | 'heal';
+}
+
 export interface ClassDef {
   id: ClassId;
   name: string;
@@ -63,6 +77,7 @@ export interface ClassDef {
   passive: { name: string; desc: string; icon: IconName };
   abilities: AbilityDef[];
   ultimate: AbilityDef;
+  guard: GuardDef;
 }
 
 const baseStats = (o: Partial<Stats>): Stats => ({
@@ -78,14 +93,15 @@ export const CLASSES: ClassDef[] = [
     tagline: 'An immovable flame in a falling world.',
     lore: 'Last of the Dawnwatch, sworn to hold the gate until the sun returns. The shield is not a tool. It is a promise.',
     colors: { main: '#ffcf7a', glow: '#ffae42', cloth: '#3b5c9e', accent: '#e8eefc' },
-    stats: baseStats({ maxHp: 380, atk: 26, armor: 14, crit: 0.09, critMult: 1.5, speed: 1.6, dodge: 0.02, regen: 0.3, damageReduction: 0.04 }),
+    stats: baseStats({ maxHp: 340, atk: 32, armor: 10, crit: 0.09, critMult: 1.5, speed: 1.6, dodge: 0.02, regen: 0.3, damageReduction: 0.04 }),
     passive: { name: 'Bulwark', desc: 'Takes 8% less damage from all sources.', icon: 'shield' },
     abilities: [
-      { id: 'shield-slam', name: 'Shield Slam', desc: 'Crush one foe for 130% ATK and stun it for 1.2s.', icon: 'hammer', cooldown: 6.5, target: 'enemy', power: 1.3, shield: 0.05, effect: { kind: 'stun', duration: 1.2, power: 1 } },
-      { id: 'radiant-ward', name: 'Radiant Ward', desc: 'Shield 12%. Reflect 25% of damage taken for 5s and deal 25% more damage for 6s.', icon: 'armor', cooldown: 9, target: 'self', shield: 0.12, selfEffects: [{ kind: 'thorns', duration: 5, power: 0.25 }, { kind: 'empower', duration: 6, power: 1.25 }] },
+      { id: 'shield-slam', name: 'Shield Slam', desc: 'Crush one foe for 130% ATK and stun it for 1.2s.', icon: 'hammer', cooldown: 6.5, target: 'enemy', power: 1.3, effect: { kind: 'stun', duration: 1.2, power: 1 } },
+      { id: 'radiant-ward', name: 'Radiant Ward', desc: 'Shield 8%. Reflect 25% of damage taken for 5s and deal 25% more damage for 6s.', icon: 'armor', cooldown: 9, target: 'self', shield: 0.08, selfEffects: [{ kind: 'thorns', duration: 5, power: 0.25 }, { kind: 'empower', duration: 6, power: 1.25 }] },
       { id: 'dawnbreaker', name: 'Dawnbreaker', desc: 'Holy shock hits all foes for 95% ATK and burns them.', icon: 'star', cooldown: 9.5, target: 'allEnemies', power: 0.95, effect: { kind: 'burn', duration: 4, power: 0.14 } },
     ],
-    ultimate: { id: 'unbreakable', name: 'Unbreakable', desc: 'Gain a 25% shield, heal 18%, and reflect 20% of damage taken for 4s.', icon: 'shield', cooldown: 0, target: 'self', heal: 0.18, shield: 0.25, selfEffect: { kind: 'thorns', duration: 4, power: 0.2 } },
+    ultimate: { id: 'unbreakable', name: 'Unbreakable', desc: 'Gain a 15% shield, heal 8%, and reflect 20% of damage taken for 4s.', icon: 'shield', cooldown: 0, target: 'self', heal: 0.08, shield: 0.15, selfEffect: { kind: 'thorns', duration: 4, power: 0.2 } },
+    guard: { id: 'bulwark', name: 'Bulwark', desc: 'Raise your shield. Blocks half of any hit; time it to a heavy blow to stagger the foe and gain a ward.', icon: 'shield', bonus: 'shield' },
   },
   {
     id: 'pyromancer',
@@ -102,6 +118,7 @@ export const CLASSES: ClassDef[] = [
       { id: 'cinder-veil', name: 'Cinder Veil', desc: 'Gain 10% shield, +35% ATK and +25% haste for 5s.', icon: 'veil', cooldown: 12, target: 'self', shield: 0.1, selfEffects: [{ kind: 'empower', duration: 5, power: 1.35 }, { kind: 'haste', duration: 5, power: 1.25 }] },
     ],
     ultimate: { id: 'meteor', name: 'Fallen Star', desc: 'Call a meteor: 280% ATK to all foes, burn 6s, stun 0.9s.', icon: 'meteor', cooldown: 0, target: 'allEnemies', power: 2.8, effect: { kind: 'burn', duration: 6, power: 0.3 } },
+    guard: { id: 'blink', name: 'Blink', desc: 'Step through flame. Halves any hit; time it to a heavy blow to stagger the foe and set it ablaze.', icon: 'flame', bonus: 'burn' },
   },
   {
     id: 'shadowblade',
@@ -118,6 +135,7 @@ export const CLASSES: ClassDef[] = [
       { id: 'smoke-step', name: 'Smoke Step', desc: 'Heal 10%, gain 30% dodge and 30% haste for 5s.', icon: 'smoke', cooldown: 13, target: 'self', heal: 0.1, selfEffects: [{ kind: 'dodge', duration: 5, power: 0.3 }, { kind: 'haste', duration: 5, power: 1.3 }] },
     ],
     ultimate: { id: 'death-mark', name: 'Death Mark', desc: 'A single perfect strike for 380% ATK. Always crits.', icon: 'skull', cooldown: 0, target: 'enemy', power: 3.8, effect: { kind: 'bleed', duration: 8, power: 0.2 } },
+    guard: { id: 'riposte', name: 'Riposte', desc: 'Parry. Halves any hit; time it to a heavy blow to stagger the foe and strike back with a critical blow.', icon: 'dagger', bonus: 'counter' },
   },
   {
     id: 'spiritcaller',
@@ -126,14 +144,15 @@ export const CLASSES: ClassDef[] = [
     tagline: 'Every root remembers, every wolf sings.',
     lore: 'She walked into the Whisperwood as a child and walked out a hundred years later, followed by half the forest.',
     colors: { main: '#8dffc2', glow: '#3ddc97', cloth: '#2d5a3f', accent: '#e7ffd4' },
-    stats: baseStats({ maxHp: 310, atk: 25, armor: 11, crit: 0.1, critMult: 1.5, speed: 1.8, dodge: 0.04, regen: 1.4 }),
+    stats: baseStats({ maxHp: 310, atk: 27, armor: 11, crit: 0.1, critMult: 1.5, speed: 1.8, dodge: 0.04, regen: 0.6 }),
     passive: { name: 'Verdance', desc: 'Regenerates 1.4 HP each second.', icon: 'leaf' },
     abilities: [
       { id: 'thorn-lash', name: 'Thorn Lash', desc: 'Vines strike all foes for 90% ATK and slow them.', icon: 'leaf', cooldown: 6.5, target: 'allEnemies', power: 0.9, effect: { kind: 'slow', duration: 3, power: 1.25 } },
       { id: 'spirit-bloom', name: 'Spirit Bloom', desc: 'Heal 24% HP and regenerate for 5s. Cleanses burns.', icon: 'bloom', cooldown: 10, target: 'self', heal: 0.24, cleanse: true, selfEffect: { kind: 'regen', duration: 5, power: 3 } },
       { id: 'spirit-wolf', name: 'Call the Pack', desc: 'Summon a spirit wolf that fights beside you for 12s.', icon: 'wolf', cooldown: 14, target: 'self', summon: true },
     ],
-    ultimate: { id: 'gaia-embrace', name: "Gaia's Embrace", desc: 'Heal 40%, then all foes take 220% ATK and are slowed.', icon: 'crown', cooldown: 0, target: 'allEnemies', power: 2.2, heal: 0.4, effect: { kind: 'slow', duration: 4, power: 1.4 } },
+    ultimate: { id: 'gaia-embrace', name: "Gaia's Embrace", desc: 'Heal 30%, then all foes take 220% ATK and are slowed.', icon: 'crown', cooldown: 0, target: 'allEnemies', power: 2.2, heal: 0.3, effect: { kind: 'slow', duration: 4, power: 1.4 } },
+    guard: { id: 'spirit-ward', name: 'Spirit Ward', desc: 'Call a spirit shield. Halves any hit; time it to a heavy blow to stagger the foe and mend your wounds.', icon: 'bloom', bonus: 'heal' },
   },
 ];
 
@@ -200,6 +219,7 @@ export interface EnemyDef {
   dodge?: number;
   scale?: number;
   abilities: AbilityDef[];
+  heavy?: HeavyDef;
   boss?: boolean;
 }
 
@@ -237,9 +257,9 @@ export const LOCATIONS: LocationDef[] = [
     enemies: [
       { id: 'cinder-imp', name: 'Cinder Imp', body: 'imp', colors: { main: '#ff7a45', dark: '#751f2b', glow: '#ffd08a' }, hp: 68, atk: 8, armor: 2, speed: 2.7, abilities: [enemyAbility('spit', 'Cinder Spit', 'A gout of flame.', 8, 1.5, { effect: { kind: 'burn', duration: 3, power: 0.1 } })] },
       { id: 'ash-hound', name: 'Ash Hound', body: 'hound', colors: { main: '#c96a3c', dark: '#3d1a1a', glow: '#ffbe73' }, hp: 84, atk: 9, armor: 4, speed: 2.1, abilities: [enemyAbility('pounce', 'Pounce', 'Leaps at its prey.', 7, 1.6)] },
-      { id: 'magma-brute', name: 'Magma Brute', body: 'brute', colors: { main: '#e2603a', dark: '#451318', glow: '#ffcf5e' }, hp: 150, atk: 12, armor: 8, speed: 3.2, scale: 1.15, abilities: [enemyAbility('slam', 'Molten Slam', 'Shakes the ground.', 9, 1.9, { effect: { kind: 'stun', duration: 0.8, power: 1 } })] },
+      { id: 'magma-brute', name: 'Magma Brute', body: 'brute', colors: { main: '#e2603a', dark: '#451318', glow: '#ffcf5e' }, hp: 150, atk: 12, armor: 8, speed: 3.2, scale: 1.15, abilities: [enemyAbility('slam', 'Molten Slam', 'Shakes the ground.', 9, 1.9, { effect: { kind: 'stun', duration: 0.8, power: 1 } })] , heavy: { id: 'overhead-smash', name: 'Overhead Smash', desc: 'Both fists fall like a falling wall.', power: 4.5, windup: 1.6, cooldown: 11, first: 5, target: 'enemy' } },
     ],
-    boss: { id: 'molten-warden', name: 'The Molten Warden', body: 'knight', colors: { main: '#ffb14d', dark: '#3a0d12', glow: '#ffe08a' }, hp: 430, atk: 15, armor: 10, speed: 2.3, scale: 1.45, boss: true, abilities: [enemyAbility('cleave', 'Searing Cleave', 'A wide arc of fire.', 8, 1.7, { target: 'allEnemies' }), enemyAbility('furnace', 'Furnace Heart', 'Its core flares.', 12, 1.2, { selfEffect: { kind: 'empower', duration: 5, power: 1.5 } })] },
+    boss: { id: 'molten-warden', name: 'The Molten Warden', body: 'knight', colors: { main: '#ffb14d', dark: '#3a0d12', glow: '#ffe08a' }, hp: 430, atk: 15, armor: 10, speed: 2.3, scale: 1.45, boss: true, abilities: [enemyAbility('cleave', 'Searing Cleave', 'A wide arc of fire.', 8, 1.7, { target: 'allEnemies' }), enemyAbility('furnace', 'Furnace Heart', 'Its core flares.', 12, 1.2, { selfEffect: { kind: 'empower', duration: 5, power: 1.5 } })] , heavy: { id: 'eruption', name: 'Eruption', desc: 'The ground splits and fire answers.', power: 3.0, windup: 1.5, cooldown: 9, first: 6, target: 'enemy' } },
   },
   {
     id: 'whisperwood',
@@ -252,9 +272,9 @@ export const LOCATIONS: LocationDef[] = [
     enemies: [
       { id: 'bramble-stalker', name: 'Bramble Stalker', body: 'stalker', colors: { main: '#6fbf7a', dark: '#163526', glow: '#c9ffb0' }, hp: 88, atk: 10, armor: 4, speed: 2.2, abilities: [enemyAbility('lash', 'Bramble Lash', 'Thorned vines.', 7, 1.5, { effect: { kind: 'poison', duration: 4, power: 0.12 } })] },
       { id: 'spore-wisp', name: 'Spore Wisp', body: 'wisp', colors: { main: '#9ff4b8', dark: '#2a5c46', glow: '#e4ffcf' }, hp: 62, atk: 8, armor: 0, speed: 2.9, abilities: [enemyAbility('burst', 'Spore Burst', 'A cloud of rot.', 8, 1.2, { target: 'allEnemies', effect: { kind: 'poison', duration: 5, power: 0.1 } })] },
-      { id: 'hollow-treant', name: 'Hollow Treant', body: 'treant', colors: { main: '#5c8f5a', dark: '#1d3323', glow: '#b4e08a' }, hp: 180, atk: 13, armor: 10, speed: 3.4, scale: 1.2, abilities: [enemyAbility('roots', 'Entangling Roots', 'Roots grasp from below.', 9, 1.4, { effect: { kind: 'stun', duration: 1, power: 1 } })] },
+      { id: 'hollow-treant', name: 'Hollow Treant', body: 'treant', colors: { main: '#5c8f5a', dark: '#1d3323', glow: '#b4e08a' }, hp: 180, atk: 13, armor: 10, speed: 3.4, scale: 1.2, abilities: [enemyAbility('roots', 'Entangling Roots', 'Roots grasp from below.', 9, 1.4, { effect: { kind: 'stun', duration: 1, power: 1 } })] , heavy: { id: 'crushing-bough', name: 'Crushing Bough', desc: 'A limb older than the forest comes down.', power: 4.5, windup: 1.6, cooldown: 11, first: 5, target: 'enemy' } },
     ],
-    boss: { id: 'pale-stag', name: 'The Pale Stag', body: 'wolf', colors: { main: '#e7ffe9', dark: '#2e5c45', glow: '#8dffc2' }, hp: 470, atk: 16, armor: 8, speed: 2.1, scale: 1.5, boss: true, abilities: [enemyAbility('antlers', 'Antler Rush', 'A blur of bone.', 7.5, 1.8), enemyAbility('moonlit', 'Moonlit Grace', 'The stag flickers.', 13, 0.8, { selfEffect: { kind: 'haste', duration: 6, power: 1.5 }, heal: 0.1 })] },
+    boss: { id: 'pale-stag', name: 'The Pale Stag', body: 'wolf', colors: { main: '#e7ffe9', dark: '#2e5c45', glow: '#8dffc2' }, hp: 470, atk: 16, armor: 8, speed: 2.1, scale: 1.5, boss: true, abilities: [enemyAbility('antlers', 'Antler Rush', 'A blur of bone.', 7.5, 1.8), enemyAbility('moonlit', 'Moonlit Grace', 'The stag flickers.', 13, 0.8, { selfEffect: { kind: 'haste', duration: 6, power: 1.5 }, heal: 0.1 })] , heavy: { id: 'stampede', name: 'Moonlit Stampede', desc: 'A tide of antler and silver light.', power: 2.8, windup: 1.4, cooldown: 8.5, first: 6, target: 'enemy' } },
   },
   {
     id: 'frostveil',
@@ -267,9 +287,9 @@ export const LOCATIONS: LocationDef[] = [
     enemies: [
       { id: 'rime-wolf', name: 'Rime Wolf', body: 'wolf', colors: { main: '#bfe9ff', dark: '#28455e', glow: '#e8fbff' }, hp: 100, atk: 11, armor: 5, speed: 1.9, abilities: [enemyAbility('frostbite', 'Frostbite', 'Teeth like icicles.', 7, 1.6, { effect: { kind: 'slow', duration: 4, power: 1.3 } })] },
       { id: 'frost-wraith', name: 'Frost Wraith', body: 'wraith', colors: { main: '#9fd8ff', dark: '#203b58', glow: '#d7f4ff' }, hp: 78, atk: 10, armor: 2, speed: 2.5, abilities: [enemyAbility('chill', 'Chill Touch', 'A numb caress.', 8, 1.5, { effect: { kind: 'slow', duration: 3, power: 1.4 } })] },
-      { id: 'ice-golem', name: 'Ice Golem', body: 'golem', colors: { main: '#a9d8ee', dark: '#22415a', glow: '#e9ffff' }, hp: 210, atk: 14, armor: 14, speed: 3.5, scale: 1.2, abilities: [enemyAbility('avalanche', 'Avalanche Fist', 'A frozen hammer.', 10, 2.0, { effect: { kind: 'stun', duration: 0.7, power: 1 } })] },
+      { id: 'ice-golem', name: 'Ice Golem', body: 'golem', colors: { main: '#a9d8ee', dark: '#22415a', glow: '#e9ffff' }, hp: 210, atk: 14, armor: 14, speed: 3.5, scale: 1.2, abilities: [enemyAbility('avalanche', 'Avalanche Fist', 'A frozen hammer.', 10, 2.0, { effect: { kind: 'stun', duration: 0.7, power: 1 } })] , heavy: { id: 'glacier-fist', name: 'Glacier Fist', desc: 'A frozen hammer of a fist.', power: 4.5, windup: 1.6, cooldown: 11, first: 5, target: 'enemy' } },
     ],
-    boss: { id: 'winters-herald', name: "The Winter's Herald", body: 'seraph', colors: { main: '#d8f6ff', dark: '#29506e', glow: '#8fe3ff' }, hp: 520, atk: 17, armor: 9, speed: 2.2, scale: 1.45, boss: true, abilities: [enemyAbility('blizzard', 'Blizzard', 'The sky turns to knives.', 9, 1.6, { target: 'allEnemies', effect: { kind: 'slow', duration: 4, power: 1.35 } }), enemyAbility('icewall', 'Icewall', 'A wall of living frost.', 14, 0.9, { selfEffect: { kind: 'regen', duration: 5, power: 1.6 } })] },
+    boss: { id: 'winters-herald', name: "The Winter's Herald", body: 'seraph', colors: { main: '#d8f6ff', dark: '#29506e', glow: '#8fe3ff' }, hp: 520, atk: 17, armor: 9, speed: 2.2, scale: 1.45, boss: true, abilities: [enemyAbility('blizzard', 'Blizzard', 'The sky turns to knives.', 9, 1.6, { target: 'allEnemies', effect: { kind: 'slow', duration: 4, power: 1.35 } }), enemyAbility('icewall', 'Icewall', 'A wall of living frost.', 14, 0.9, { selfEffect: { kind: 'regen', duration: 5, power: 1.6 } })] , heavy: { id: 'glacial-spear', name: 'Glacial Spear', desc: 'A lance of ice from the winter sky.', power: 3.0, windup: 1.4, cooldown: 9, first: 6, target: 'enemy' } },
   },
   {
     id: 'sunken-sanctum',
@@ -282,9 +302,9 @@ export const LOCATIONS: LocationDef[] = [
     enemies: [
       { id: 'drowned-acolyte', name: 'Drowned Acolyte', body: 'revenant', colors: { main: '#6fd4cd', dark: '#163d44', glow: '#b6fff2' }, hp: 96, atk: 11, armor: 4, speed: 2.4, abilities: [enemyAbility('hymn', 'Drowning Hymn', 'A song that fills the lungs.', 8, 1.4, { effect: { kind: 'poison', duration: 4, power: 0.14 } })] },
       { id: 'tide-revenant', name: 'Tide Revenant', body: 'stalker', colors: { main: '#5fb8c9', dark: '#123540', glow: '#a9fff2' }, hp: 122, atk: 12, armor: 6, speed: 2.2, abilities: [enemyAbility('undertow', 'Undertow', 'The current pulls.', 8, 1.6, { effect: { kind: 'slow', duration: 3, power: 1.3 } })] },
-      { id: 'coral-sentinel', name: 'Coral Sentinel', body: 'sentinel', colors: { main: '#ff9a9a', dark: '#4a2338', glow: '#ffd3c0' }, hp: 220, atk: 15, armor: 13, speed: 3.1, scale: 1.15, abilities: [enemyAbility('barnacle', 'Barnacle Barrage', 'A rain of shells.', 9, 1.7, { target: 'allEnemies' })] },
+      { id: 'coral-sentinel', name: 'Coral Sentinel', body: 'sentinel', colors: { main: '#ff9a9a', dark: '#4a2338', glow: '#ffd3c0' }, hp: 220, atk: 15, armor: 13, speed: 3.1, scale: 1.15, abilities: [enemyAbility('barnacle', 'Barnacle Barrage', 'A rain of shells.', 9, 1.7, { target: 'allEnemies' })] , heavy: { id: 'shell-crash', name: 'Shell Crash', desc: 'A wall of coral slams home.', power: 4.5, windup: 1.6, cooldown: 11, first: 5, target: 'enemy' } },
     ],
-    boss: { id: 'leviathan-eye', name: 'The Leviathan Eye', body: 'crab', colors: { main: '#7cf0d8', dark: '#122e3e', glow: '#d8fff8' }, hp: 610, atk: 18, armor: 10, speed: 2.3, scale: 1.5, boss: true, abilities: [enemyAbility('abyss-gaze', 'Abyssal Gaze', 'The eye opens.', 9, 1.8, { effect: { kind: 'stun', duration: 0.8, power: 1 } }), enemyAbility('maelstrom', 'Maelstrom', 'The waters churn.', 12, 1.5, { target: 'allEnemies' })] },
+    boss: { id: 'leviathan-eye', name: 'The Leviathan Eye', body: 'crab', colors: { main: '#7cf0d8', dark: '#122e3e', glow: '#d8fff8' }, hp: 610, atk: 18, armor: 10, speed: 2.3, scale: 1.5, boss: true, abilities: [enemyAbility('abyss-gaze', 'Abyssal Gaze', 'The eye opens.', 9, 1.8, { effect: { kind: 'stun', duration: 0.8, power: 1 } }), enemyAbility('maelstrom', 'Maelstrom', 'The waters churn.', 12, 1.5, { target: 'allEnemies' })] , heavy: { id: 'tidal-crush', name: 'Tidal Crush', desc: 'The deep rises and falls at once.', power: 3.2, windup: 1.5, cooldown: 9, first: 6, target: 'allEnemies' } },
   },
   {
     id: 'ember-throne',
@@ -297,9 +317,9 @@ export const LOCATIONS: LocationDef[] = [
     enemies: [
       { id: 'void-knight', name: 'Void Knight', body: 'knight', colors: { main: '#a98bff', dark: '#1e1235', glow: '#d9c8ff' }, hp: 140, atk: 14, armor: 9, speed: 2.3, abilities: [enemyAbility('void-cut', 'Void Cut', 'It cuts through memory.', 7, 1.8)] },
       { id: 'ash-seraph', name: 'Ash Seraph', body: 'seraph', colors: { main: '#ff9ad9', dark: '#3d1236', glow: '#ffd9f2' }, hp: 118, atk: 13, armor: 5, speed: 2.5, abilities: [enemyAbility('cinder-hymn', 'Cinder Hymn', 'Wings of falling ash.', 8, 1.4, { target: 'allEnemies', effect: { kind: 'burn', duration: 4, power: 0.14 } })] },
-      { id: 'dusk-wyrm', name: 'Dusk Wyrm', body: 'wyrm', colors: { main: '#7d64e8', dark: '#1b1030', glow: '#ff9aef' }, hp: 205, atk: 16, armor: 8, speed: 2.6, scale: 1.2, abilities: [enemyAbility('breath', 'Dusk Breath', 'A sigh that unmakes.', 9, 1.8, { effect: { kind: 'burn', duration: 4, power: 0.16 } })] },
+      { id: 'dusk-wyrm', name: 'Dusk Wyrm', body: 'wyrm', colors: { main: '#7d64e8', dark: '#1b1030', glow: '#ff9aef' }, hp: 205, atk: 16, armor: 8, speed: 2.6, scale: 1.2, abilities: [enemyAbility('breath', 'Dusk Breath', 'A sigh that unmakes.', 9, 1.8, { effect: { kind: 'burn', duration: 4, power: 0.16 } })] , heavy: { id: 'tail-sweep', name: 'Tail Sweep', desc: 'The whole body turns into a whip.', power: 4.5, windup: 1.6, cooldown: 11, first: 5, target: 'enemy' } },
     ],
-    boss: { id: 'ashen-king', name: 'The Ashen King', body: 'king', colors: { main: '#ffcf7a', dark: '#1a0b1f', glow: '#ff4d6d' }, hp: 820, atk: 11, armor: 12, speed: 1.1, scale: 1.6, boss: true, abilities: [enemyAbility('crown-fire', 'Crownfire', 'The crown answers.', 8, 2.0, { target: 'allEnemies',  effect: { kind: 'burn', duration: 5, power: 0.2 } }), enemyAbility('kingslaw', 'King\'s Law', 'Reality kneels.', 13, 1.6, { effect: { kind: 'stun', duration: 1.1, power: 1 } }), enemyAbility('rekindle', 'Rekindle', 'He refuses the end.', 20, 0, { target: 'self', heal: 0.08, selfEffect: { kind: 'empower', duration: 6, power: 1.3 } })] },
+    boss: { id: 'ashen-king', name: 'The Ashen King', body: 'king', colors: { main: '#ffcf7a', dark: '#1a0b1f', glow: '#ff4d6d' }, hp: 820, atk: 11, armor: 12, speed: 1.1, scale: 1.6, boss: true, abilities: [enemyAbility('crown-fire', 'Crownfire', 'The crown answers.', 8, 2.0, { target: 'allEnemies',  effect: { kind: 'burn', duration: 5, power: 0.2 } }), enemyAbility('kingslaw', 'King\'s Law', 'Reality kneels.', 13, 1.6, { effect: { kind: 'stun', duration: 1.1, power: 1 } }), enemyAbility('rekindle', 'Rekindle', 'He refuses the end.', 20, 0, { target: 'self', heal: 0.08, selfEffect: { kind: 'empower', duration: 6, power: 1.3 } })] , heavy: { id: 'kings-judgment', name: "King's Judgment", desc: 'The crown descends. Reality kneels.', power: 4.0, windup: 1.6, cooldown: 10, first: 7, target: 'enemy' } },
   },
 ];
 
