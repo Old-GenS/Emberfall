@@ -1,5 +1,6 @@
-import type { Battle, CombatEvent, Unit } from './combat';
+import { enrageMultiplier, type Battle, type CombatEvent, type Unit } from './combat';
 import { type ClassDef, type LocationDef } from './data';
+import type { RealmEvents } from './realm-events';
 import { drawFinishedUnit, drawGothicHalo, type UnitLight } from './sprites/index';
 
 export const DESIGN_W = 960;
@@ -148,6 +149,11 @@ export class SceneRenderer {
   private bgLocId = '';
   private battle: Battle | null = null;
   location: LocationDef | null = null;
+  private realmEvents: RealmEvents | null = null;
+  /** Battle time at which enrage first became visible; null until then. */
+  enrageStartedAt: number | null = null;
+  /** Latest enrage damage multiplier, refreshed every frame. */
+  private enrage = 1;
 
   private particles: Particle[] = [];
   private slashes: SlashArc[] = [];
@@ -201,6 +207,39 @@ export class SceneRenderer {
 
   setBattle(battle: Battle): void {
     this.battle = battle;
+    this.enrageStartedAt = null;
+    this.enrage = enrageMultiplier(battle.elapsed);
+  }
+
+  setRealmEvents(ev: RealmEvents | null): void {
+    this.realmEvents = ev;
+  }
+
+  /** Convert a pointer's client coordinates to the 960x540 design space used by draw(). */
+  toDesign(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    const s = Math.min(cw / DESIGN_W, ch / DESIGN_H);
+    const ox = (cw - DESIGN_W * s) / 2;
+    const oy = ch - DESIGN_H * s;
+    const px = (clientX - rect.left) * (cw / Math.max(1, rect.width));
+    const py = (clientY - rect.top) * (ch / Math.max(1, rect.height));
+    return { x: (px - ox) / s, y: (py - oy) / s };
+  }
+
+  /** Convert a design-space point to client coordinates. */
+  toClient(x: number, y: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    const s = Math.min(cw / DESIGN_W, ch / DESIGN_H);
+    const ox = (cw - DESIGN_W * s) / 2;
+    const oy = ch - DESIGN_H * s;
+    return {
+      x: rect.left + (x * s + ox) * (rect.width / Math.max(1, cw)),
+      y: rect.top + (y * s + oy) * (rect.height / Math.max(1, ch)),
+    };
   }
 
   private newAmbient(initial = false): Ambient {
@@ -267,13 +306,14 @@ export class SceneRenderer {
         if (e.amount < 0.5) {
           this.damageFloater(e.target.uid, pos.x, pos.y - 154 * pos.scale - 48, 'WARDED', '#ffe09a', 15, -28);
         } else {
+          const fontScale = this.enrageFontScale();
           this.damageFloater(
             e.target.uid,
             pos.x,
             pos.y - 154 * pos.scale - 48,
             e.crit ? `${Math.round(e.amount)}!` : `${Math.round(e.amount)}`,
             color,
-            e.crit ? 31 : e.kind === 'ult' ? 27 : 20,
+            (e.crit ? 31 : e.kind === 'ult' ? 27 : 20) * fontScale,
             e.crit ? -60 : -44,
           );
         }
@@ -556,12 +596,20 @@ export class SceneRenderer {
     // 4. Ground Briar Eruptions (behind/under units)
     this.drawBriars(ctx, dt);
 
-    // 5. Units depth-sorted by Y
+    // Enrage starts as soon as battle time passes the threshold; the banner only plays once.
+    this.enrage = enrageMultiplier(battle.elapsed);
+    if (this.enrage > 1 && this.enrageStartedAt === null) this.enrageStartedAt = battle.elapsed;
+
+    // 5. Units depth-sorted by Y. Living enemies get a red enrage glow behind them first.
     const all = [...battle.enemies, ...battle.allies, battle.hero];
     const sorted = all.filter(u => u.alive || u.deadTime < 2.2).sort((a, b) => this.unitPosition(a).y - this.unitPosition(b).y);
+    if (this.enrage > 1) {
+      for (const u of sorted) if (u.alive && u.side === 'enemy') this.drawEnrageGlow(ctx, u);
+    }
     for (const u of sorted) this.drawUnit(ctx, u);
 
-    // 6. Foreground Spell Bolts, Sky Pillars, Slashes, Execution Marks & Sparks
+    // 6. Realm events play over the units and under the damage floaters.
+    this.realmEvents?.draw(ctx, this.time);
     this.drawSkyPillars(ctx, dt);
     this.drawBolts(ctx, dt);
     this.drawSlashes(ctx, dt);
@@ -571,6 +619,8 @@ export class SceneRenderer {
 
     // 7. Chiaroscuro ground mist & gothic frame vignette
     this.drawStageVignette(ctx);
+    if (this.enrage > 1) this.drawEnrageVignette(ctx);
+    if (this.enrage > 1) this.drawEnrageBanner(ctx, battle.elapsed);
 
     ctx.restore();
 
@@ -655,6 +705,76 @@ export class SceneRenderer {
       ctx.fillStyle = ug;
       ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
     }
+  }
+
+  private enrageFontScale(): number {
+    if (!this.battle) return 1;
+    const m = enrageMultiplier(this.battle.elapsed);
+    return m > 1 ? Math.min(1.6, 1 + (m - 1) * 0.35) : 1;
+  }
+
+  private drawEnrageGlow(ctx: CanvasRenderingContext2D, u: Unit): void {
+    const pos = this.unitPosition(u);
+    const alpha = Math.min(0.5, (this.enrage - 1) * 0.3);
+    if (alpha <= 0) return;
+    const r = 92 * pos.scale;
+    const cx = pos.x;
+    const cy = pos.y - 74 * pos.scale;
+    const glow = ctx.createRadialGradient(cx, cy, 6, cx, cy, r);
+    glow.addColorStop(0, `rgba(255,59,47,${alpha})`);
+    glow.addColorStop(0.55, `rgba(255,59,47,${alpha * 0.45})`);
+    glow.addColorStop(1, 'rgba(255,59,47,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.restore();
+  }
+
+  private drawEnrageVignette(ctx: CanvasRenderingContext2D): void {
+    const pulse = 1 + 0.15 * Math.sin(this.time * Math.PI * 2 * 1.2);
+    const alpha = Math.min(0.42, (this.enrage - 1) * 0.25) * pulse;
+    if (alpha <= 0) return;
+    const g = ctx.createRadialGradient(480, 270, 210, 480, 270, 610);
+    g.addColorStop(0, 'rgba(255,40,30,0)');
+    g.addColorStop(0.62, `rgba(255,40,30,${alpha * 0.22})`);
+    g.addColorStop(1, `rgba(255,40,30,${alpha})`);
+    ctx.save();
+    ctx.fillStyle = g;
+    ctx.fillRect(-8, -8, DESIGN_W + 16, DESIGN_H + 16);
+    ctx.restore();
+  }
+
+  private drawEnrageBanner(ctx: CanvasRenderingContext2D, battleTime: number): void {
+    if (this.enrageStartedAt === null) return;
+    const age = battleTime - this.enrageStartedAt;
+    const fadeIn = 0.3;
+    const hold = 2;
+    const fadeOut = 0.6;
+    if (age > fadeIn + hold + fadeOut) return;
+    const alpha = age < fadeIn
+      ? age / fadeIn
+      : age < fadeIn + hold
+        ? 1
+        : Math.max(0, 1 - (age - fadeIn - hold) / fadeOut);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    const cx = DESIGN_W / 2;
+    ctx.font = '700 34px "Cinzel", "Palatino Linotype", Georgia, serif';
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = '#050309';
+    ctx.strokeText('THE VALE GROWS RESTLESS', cx, 244);
+    ctx.fillStyle = '#ffd2a6';
+    ctx.fillText('THE VALE GROWS RESTLESS', cx, 244);
+    ctx.font = '600 16px "Cinzel", "Palatino Linotype", Georgia, serif';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#050309';
+    ctx.strokeText('All damage rises every second', cx, 276);
+    ctx.fillStyle = '#f3d7b4';
+    ctx.fillText('All damage rises every second', cx, 276);
+    ctx.restore();
   }
 
   /* ------------------------------ VFX Renderers ---------------------------- */

@@ -2,9 +2,10 @@ import './style.css';
 import {
   BOONS, TOTAL_STAGES, buildWave, classById, stageInfo, type ClassId, type IconName,
 } from './data';
-import { Battle, type CombatEvent } from './combat';
+import { Battle, enrageMultiplier, type CombatEvent } from './combat';
 import { BALANCE } from './balance';
 import { SceneRenderer } from './art';
+import { RealmEvents } from './realm-events';
 import { audio, type ThemeId } from './audio';
 import {
   applyBoon, completeStage, getSave, hasHero, heroStats, isVictory, loadSave,
@@ -24,9 +25,11 @@ type Screen = 'title' | 'classes' | 'map' | 'battle' | 'reward' | 'victory';
 let screen: Screen = 'title';
 let battle: Battle | null = null;
 let renderer: SceneRenderer | null = null;
+let realmEvents: RealmEvents | null = null;
+let enrageMusicPlayed = false;
 let raf = 0;
 let paused = false;
-let speed = 1;
+let speed: 1 | 2 | 3 = 1;
 /**
  * The default pace: seconds of game time per second of real time at 1x. Fights last 6-30 s of
  * game time, which at 1.0 was too quick to read, so the clock runs at 0.75 by default and a 6 s
@@ -174,10 +177,12 @@ function stopBattle(): void {
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   battle = null;
+  realmEvents = null;
   renderer?.destroy();
   renderer = null;
   paused = false;
   speed = 1;
+  enrageMusicPlayed = false;
   overlayShown = false;
   endHandled = false;
   endTimer = 0;
@@ -235,6 +240,34 @@ function startBattle(keepRally = false): void {
   if (rally > 1) { stats.maxHp = Math.round(stats.maxHp * rally); stats.atk = Math.round(stats.atk * rally * 10) / 10; }
   battle = new Battle(cls.id, stats, wave, save.stage, { onEvent: handleEvent });
   renderer.setBattle(battle);
+  realmEvents = new RealmEvents(info.location.particle, info.location.palette.accent);
+  renderer.setRealmEvents(realmEvents);
+  canvas.addEventListener('pointerdown', (ev) => {
+    if (!battle || !renderer || !realmEvents || paused || battle.ended) return;
+    const p = renderer.toDesign(ev.clientX, ev.clientY);
+    if (realmEvents.hit(p.x, p.y)) {
+      battle.grantUltCharge(15);
+      audio.sfx('heal');
+      updateHud();
+      ev.preventDefault();
+    }
+  });
+  canvas.addEventListener('pointermove', (ev) => {
+    if (!renderer || !realmEvents) return;
+    const spark = realmEvents.spark;
+    let over = false;
+    if (spark) {
+      const p = renderer.toDesign(ev.clientX, ev.clientY);
+      const bob = Math.sin(spark.age * 3) * 4;
+      const dx = p.x - spark.x;
+      const dy = p.y - (spark.y + bob);
+      over = dx * dx + dy * dy <= 34 * 34;
+    }
+    canvas.classList.toggle('spark-hover', over);
+  });
+  if (location.search.includes('debug=1')) {
+    (window as unknown as Record<string, unknown>).__emberfall = { battle, renderer, realmEvents, audio };
+  }
   const boss = save.stage % 5 === 4;
   audio.playMusic(info.location.music as ThemeId, boss);
   if (boss) setTimeout(() => sfx('boss'), 150);
@@ -248,7 +281,8 @@ function startBattle(keepRally = false): void {
   }
   overlayShown = false;
   paused = false;
-  speed = 1;
+  speed = getSave().battleSpeed;
+  enrageMusicPlayed = false;
   lastFrame = performance.now();
   raf = requestAnimationFrame(loop);
   updateHud();
@@ -270,11 +304,12 @@ function showBattleHint(): void {
 function bindBattleControls(): void {
   document.getElementById('pause-btn')?.addEventListener('click', togglePause);
   document.getElementById('speed-btn')?.addEventListener('click', () => {
-    speed = speed === 1 ? 2 : 1;
+    speed = speed >= 3 ? 1 : (speed + 1) as 1 | 2 | 3;
+    updateSave({ battleSpeed: speed });
     const btn = document.getElementById('speed-btn');
     if (btn) {
       btn.textContent = `${speed}×`;
-      btn.classList.toggle('active', speed === 2);
+      btn.classList.toggle('active', speed > 1);
     }
     sfx('click');
   });
@@ -451,6 +486,7 @@ function loop(now: number): void {
       while (remaining > 1e-6) {
         const step = Math.min(0.05, remaining);
         battle.update(step * TIME_SCALE);
+        if (realmEvents && !modalOpen && !battle.ended) realmEvents.update(step * TIME_SCALE, battle);
         remaining -= step;
       }
     }
@@ -472,6 +508,19 @@ function loop(now: number): void {
 function updateHud(): void {
   if (!battle) return;
   const hero = battle.hero;
+  const enrage = enrageMultiplier(battle.elapsed);
+  const chip = document.getElementById('enrage-chip');
+  const mult = document.getElementById('enrage-mult');
+  if (enrage > 1) {
+    if (chip) chip.hidden = false;
+    if (mult) mult.textContent = `×${enrage.toFixed(1)}`;
+    if (!enrageMusicPlayed) {
+      enrageMusicPlayed = true;
+      audio.playMusic(themeForBattle(), true);
+    }
+  } else if (chip) {
+    chip.hidden = true;
+  }
   const ultBtn = document.getElementById('ult-btn');
   const ultPct = document.getElementById('ult-pct');
   const ultRing = document.getElementById('ult-ring') as SVGCircleElement | null;

@@ -4,6 +4,13 @@ import {
 } from './data';
 import { BALANCE } from './balance';
 
+/** Damage multiplier from the battle's enrage timer: 1 until enrageAt, then ramping linearly. */
+export function enrageMultiplier(time: number): number {
+  return time > BALANCE.combat.enrageAt
+    ? 1 + (time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp
+    : 1;
+}
+
 export interface ActiveEffect {
   kind: StatusKind;
   remaining: number;
@@ -155,6 +162,14 @@ export class Battle {
   }
 
   emit(e: CombatEvent) { this.onEvent(e); }
+
+  get elapsed(): number { return this.time; }
+
+  /** Add ultimate charge from an outside source (realm-event sparks). */
+  grantUltCharge(amount: number): void {
+    if (this.ended || !this.hero.alive) return;
+    this.hero.ultCharge = clamp(this.hero.ultCharge + amount, 0, 100);
+  }
 
   get hostilesOf(): (u: Unit) => Unit[] {
     return (u: Unit) => u.side === 'enemy'
@@ -464,7 +479,7 @@ export class Battle {
     // The air itself begins to burn after a while — no battle can stall forever. The enrage is
     // applied after armour on purpose: it is the one pressure a heavily armoured hero cannot
     // mitigate away, which is what makes a long boss fight a risk for the Warden rather than a grind.
-    if (this.time > BALANCE.combat.enrageAt) dmg *= 1 + (this.time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp;
+    dmg *= enrageMultiplier(this.time);
     dmg *= 1 - target.stats.damageReduction;
     dmg = Math.max(1, dmg);
     if (target.shield > 0) {

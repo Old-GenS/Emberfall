@@ -13,13 +13,14 @@ export interface SaveData {
   sfxVolume: number;    // 0..1, kept while muted
   musicVolume: number;  // 0..1, kept while muted
   seenIntro: boolean;
+  battleSpeed: 1 | 2 | 3; // remembered battle pace, cycled by the speed button
 }
 
 const SAVE_KEY = 'emberfall-save-v1';
 
 export const defaultSave = (): SaveData => ({
   version: 1, classId: null, level: 1, xp: 0, stage: 0, boons: [],
-  sound: true, music: true, sfxVolume: 1, musicVolume: 1, seenIntro: false,
+  sound: true, music: true, sfxVolume: 1, musicVolume: 1, seenIntro: false, battleSpeed: 1,
 });
 
 const volume = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1);
@@ -46,6 +47,7 @@ export function loadSave(): SaveData {
       sfxVolume: volume(data.sfxVolume),
       musicVolume: volume(data.musicVolume),
       seenIntro: data.seenIntro === true,
+      battleSpeed: data.battleSpeed === 1 || data.battleSpeed === 2 || data.battleSpeed === 3 ? data.battleSpeed : 1,
     };
   } catch {
     return defaultSave();
@@ -69,7 +71,7 @@ export function persistSave(): void {
 }
 
 export function resetSave(): void {
-  const keep = { sound: save.sound, music: save.music, sfxVolume: save.sfxVolume, musicVolume: save.musicVolume };
+  const keep = { sound: save.sound, music: save.music, sfxVolume: save.sfxVolume, musicVolume: save.musicVolume, battleSpeed: save.battleSpeed };
   save = { ...defaultSave(), ...keep };
   persistSave();
   listeners.forEach(l => l());

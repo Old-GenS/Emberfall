@@ -1,107 +1,111 @@
 ## Goal
 
-Replace the skill and boon tooltips with one polished hover card. Behaviour stays the same as now: it appears on mouse hover (and keyboard focus), disappears on leave, needs no click, and never pauses the battle. Only the presentation changes: a styled floating card with an icon, the name, a type line, the description and a short list of the real numbers. It is positioned so it never runs off screen. Phones keep their current inline descriptions.
+Make long battles less passive with three changes. None of them changes combat balance.
 
-The card replaces three tooltips:
-
-1. the CSS `.skill-tip` tooltip on the hero cards' skill chips (`src/ui.ts` `classCard`);
-2. the browser `title` tooltip on the battle skill slots (`src/ui.ts`, `<div class="ability" id="ab-${i}" title=…>`);
-3. the browser `title` tooltip on the boon pills (`src/ui.ts`, `<span class="boon-pill" title=…>`).
+1. **Visible enrage.** After 30 s of battle time, damage already ramps up (`BALANCE.combat.enrageAt` / `enrageRamp`), but nothing shows it. Add four things:
+   - a banner;
+   - a red vignette that deepens as enrage grows;
+   - a red glow on enemies and bigger damage numbers;
+   - more intense music and an `×1.4`-style enrage chip in the battle controls.
+2. **Battle speed** cycles 1× → 2× → 3× → 1× and is remembered in the save, instead of resetting to 1× every fight.
+3. **Realm events.** About every 12 s of battle time, a realm-flavoured visual event plays (Ember Rain, Spore Bloom, Shardfall, Tide Surge, Void Rift) and leaves a glowing **spark** in the arena. Clicking or tapping the spark gives +15 ultimate charge. The events are visual only; the spark is the one gameplay effect, and only for players who tap it.
 
 ## Files to touch
 
-- `src/hovercard.ts`: new, the card element, content builder and hover/focus handling
-- `src/ui.ts`: add `data-tip` and focusability to the three anchors, remove their `title` attributes
-- `src/main.ts`: call `initHovercard()` once at boot
-- `src/style.css`: card styles; hide `.skill-tip` on hover-capable devices
-- `tools/hovercard-check.mjs`: new, automated browser check
-- `package.json`: add script `check:hover`
+- `src/combat.ts`: `enrageMultiplier()`, public `elapsed`, `grantUltCharge()`
+- `src/state.ts`: `battleSpeed` in the save
+- `src/realm-events.ts`: new, event scheduling, visuals, the spark and hit-testing
+- `src/art.ts`: enrage visuals, drawing the realm events, `toDesign` / `toClient` coordinate helpers
+- `src/main.ts`: speed cycling and persistence, enrage music and chip, the realm-events lifecycle, tap handling, the `?debug=1` hook
+- `src/ui.ts`: enrage chip markup in the battle controls
+- `src/style.css`: enrage chip style, pointer cursor over a spark
+- `tools/battle-fx-check.mjs`: new, automated browser check
+- `package.json`: add script `check:fx`
 
 ## Steps
 
 1. Run `npm ci`.
 
-2. Create `src/hovercard.ts`, exporting `initHovercard(): void` (idempotent).
-   - **The card:** one element `<div class="hovercard" role="tooltip" id="hovercard" hidden>` appended to `document.body` once, with `pointer-events: none`.
-   - **Anchors:** any element with a `data-tip` attribute. Values:
-     - `skill:<classId>:<index>`, where `<index>` is the ability index 0–2, `ult` or `passive`;
-     - `boon:<boonId>`.
-   - **Show:**
-     - on `pointerover` of an anchor with `pointerType` `mouse` or `pen`, after 120 ms;
-     - on `focusin` of an anchor, immediately.
-     - Ignore `touch` pointers entirely.
-   - **Hide** on `pointerout` / `focusout` of the anchor, on `scroll` (capture) or `resize`, on `Escape`, and when the anchor is removed from the DOM: check on the next show, or on a `MutationObserver` of `document.body` for child-list changes.
-   - While shown, set `aria-describedby="hovercard"` on the anchor and remove it on hide.
-   - **Position:**
-     - centred above the anchor, with a 10 px gap and an arrow pointing at the anchor's centre;
-     - if there is less than 8 px of room above, place it below with the arrow flipped;
-     - clamp horizontally so the whole card stays at least 8 px inside the viewport, keeping the arrow on the anchor's centre (clamped to 14 px from the card's edges);
-     - width `min(280px, 100vw - 16px)`.
-   - **Animation:** opacity 0→1 and `translateY(4px)`→0 over 120 ms. None under `prefers-reduced-motion: reduce`.
-   - **Content**, built from `src/data.ts` (`classById`, `BOONS`). Nothing is read from the DOM except the `data-tip` value. Rows are in this order:
-     1. Header: `icon(def.icon)` from `src/ui.ts` in a 34 px framed square, the name in the display font, and a type line under it:
-        - ability: `Skill · {cooldown}s cooldown`;
-        - ultimate: `Ultimate · charges in combat`;
-        - passive: `Passive · always active`;
-        - boon: `{Rarity} boon`, plus ` · {Class name} only` if `classes` is set (capitalise the rarity).
-     2. The description (`desc`).
-     3. A fact list, abilities and ultimates only, each row a label and a value, skipping absent fields:
-        - `Target`: `enemy` → `One foe`, `allEnemies` → `All foes`, `self` → `Self`, `ally` → `An ally`;
-        - `Damage`: `{round(power*100)}% ATK`, plus ` × {hits} hits` when `hits > 1`;
-        - `Heal`: `{round(heal*100)}% max HP`;
-        - `Shield`: `{round(shield*100)}% max HP`;
-        - `Inflicts` (`effect`) and `Grants` (each of `selfEffect`, `selfEffects`), one row per status, worded as:
-          - `burn` / `poison` / `bleed`: `Burn · {round(power*100)}% ATK per second for {duration}s` (with that status's name);
-          - `stun`: `Stun · {duration}s (shorter on bosses)`;
-          - `slow`: `Slow · attacks {round((power-1)*100)}% slower for {duration}s`;
-          - `haste`: `Haste · +{round((power-1)*100)}% attack speed for {duration}s`;
-          - `empower`: `Empower · +{round((power-1)*100)}% damage for {duration}s`;
-          - `dodge`: `Dodge · +{round(power*100)}% dodge for {duration}s`;
-          - `thorns`: `Thorns · reflect {round(power*100)}% of damage taken for {duration}s`;
-          - `regen`: `Regen · {power}% max HP per second for {duration}s`;
-        - `cleanse: true` → a row `Cleanse · removes harmful effects`;
-        - `summon: true` → `Summon · calls a spirit wolf`.
-     An unknown `data-tip` shows nothing.
-   - Escape all text inserted as HTML.
+2. **`src/combat.ts`:**
+   - Export `enrageMultiplier(time: number): number`, which returns `time > BALANCE.combat.enrageAt ? 1 + (time - BALANCE.combat.enrageAt) * BALANCE.combat.enrageRamp : 1`. Make the existing damage line (`if (this.time > BALANCE.combat.enrageAt) dmg *= …`) use it, so the behaviour is identical.
+   - Add to `Battle` a public getter `elapsed` (returns `this.time`).
+   - Add a public `grantUltCharge(amount: number): void`, which adds `amount` to the hero's `ultCharge`, clamped to 0–100. It does nothing if the battle has ended or the hero is dead.
+   - Change nothing else in combat.
 
-3. In `src/ui.ts`:
-   - Each hero-card skill chip, the ultimate chip and the passive line gets `data-tip="skill:{classId}:{i|ult|passive}"`, `tabindex="0"` and `aria-label="{name}"`. Keep the existing `.skill-tip` child, which phones still show inline.
-   - Each battle `.ability` slot gets `data-tip="skill:{cls.id}:{i}"`, `tabindex="0"` and `aria-label="{name}"`, and its `title` attribute is removed.
-   - Each `.boon-pill` gets `data-tip="boon:{id}"` and `tabindex="0"`, and its `title` attribute is removed.
+3. **`src/state.ts`:** add `battleSpeed: 1 | 2 | 3` to `SaveData`, defaulting to 1. `loadSave` keeps it when it's 1, 2 or 3, otherwise uses 1. `resetSave` keeps it, like the audio settings.
 
-4. In `src/main.ts`, call `initHovercard()` once in `boot()`.
+4. **Speed (`src/main.ts`):**
+   - `startBattle` and the restart path set `speed = getSave().battleSpeed` instead of `speed = 1`.
+   - The speed button cycles 1 → 2 → 3 → 1 and saves `battleSpeed`. Its label is `${speed}×`, and its `active` class is on when `speed > 1`.
+   - The initial label rendered by `src/ui.ts` shows the saved speed.
 
-5. In `src/style.css`:
-   - `.hovercard` styles to match the game's panels: background `linear-gradient(165deg, #191226, #090611)`, `1px solid var(--line-strong)`, radius 10 px, `var(--shadow)`, padding 12 px 14px, `z-index: 80`, `position: fixed`.
-   - Name in `var(--display)` 14px `#f8eedb`; type line 10px uppercase letter-spaced `var(--gold)`; description 12.5px `var(--muted)`, line-height 1.5.
-   - Fact rows as a two-column grid (label 10px uppercase `var(--faint)`, value 12px `var(--ink)`), separated from the description by a 1px `var(--line)` rule.
-   - The arrow is a rotated 10 px square in the card's colours.
-   - Inside `@media (hover: hover)`: `.skill-tip { display: none; }`.
-   - Remove the old `.skill-chip:hover .skill-tip` rule. Keep the `@media (hover: none)` inline rules unchanged.
-   - Give focusable anchors a visible `:focus-visible` outline in `var(--gold-dark)`.
+5. **Enrage:**
+   - **`src/art.ts`:** `SceneRenderer` computes `m = enrageMultiplier(battle.elapsed)` each frame.
+     - When `m` first exceeds 1 in a battle, record `enrageStartedAt` (a public field, `null` until then; reset when a new battle starts) and play a canvas banner centred in the arena: `THE VALE GROWS RESTLESS` (display font, 34 px, `#ffd2a6` with a dark stroke), with `All damage rises every second` under it (16 px). Fade in 0.3 s, hold 2 s, fade out 0.6 s.
+     - While `m > 1`:
+       - draw a red edge vignette over the arena (radial gradient, transparent centre, `rgba(255,40,30,a)` at the edges, `a = min(0.42, (m - 1) * 0.25)`, pulsing ±15% at 1.2 Hz);
+       - draw a red glow (`#ff3b2f`, alpha `min(0.5, (m - 1) * 0.3)`) behind each living enemy, before the unit;
+       - scale the font of damage floaters created while enraged by `min(1.6, 1 + (m - 1) * 0.35)`.
+   - **`src/ui.ts`:** in the battle controls, before the pause button, add `<div class="wave-chip enrage-chip" id="enrage-chip" hidden>${icon('flame')} <span id="enrage-mult">×1.0</span></div>`.
+   - **`src/main.ts`:** in `updateHud`, when `enrageMultiplier(battle.elapsed) > 1`, show `#enrage-chip` and set `#enrage-mult` to `×{m.toFixed(1)}`. When enrage first starts in a battle, call `audio.playMusic(themeForBattle(), true)` once.
+   - **`src/style.css`:** `.enrage-chip` has a red tint (border `rgba(255,80,60,.6)`, colour `#ffb59a`) and a gentle pulse, with no animation under `prefers-reduced-motion`.
 
-6. Create `tools/hovercard-check.mjs` (Node ESM, `playwright-core`, Node built-ins only otherwise):
-   - Serve `dist/` with a small `node:http` static server on an ephemeral port (correct `Content-Type` for `.html`, `.js`, `.css`, `.json`, `.webp`, `.jpg`, `.woff2`).
-   - Launch Chromium headless with `args: ['--no-sandbox']` and `executablePath` set to `process.env.CHROMIUM_PATH` or the first that exists of `/usr/lib64/chromium-browser/chromium-browser`, `/usr/bin/chromium-browser`, `/usr/bin/chromium`.
-   - Run these checks, printing `PASS`/`FAIL` with a one-line detail for each:
-     1. **Desktop**, 1280×800: open the title screen, click `[data-nav="classes"]`, and hover the Warden's first skill chip (`[data-tip="skill:warden:0"]`). After 300 ms, `.hovercard` is visible, contains `Shield Slam`, `130% ATK` and `Stun`, and its bounding box is fully inside the viewport.
-     2. Move the mouse to (5, 5). Within 300 ms, `.hovercard` is hidden.
-     3. No element on the class screen has a `title` attribute containing `Shield Slam`.
-     4. Focus `[data-tip="skill:warden:ult"]` with `element.focus()`. The card is visible and contains `Ultimate`.
-     5. Hover the chip at the far right of the last class card (`[data-tip="skill:spiritcaller:ult"]`). The card stays fully inside the viewport.
-     6. Click `[data-choose="warden"]` to start a battle, then wait 1500 ms. Hover `#ab-0`. After 300 ms the card is visible and contains `Shield Slam` and `6.5s`, and `#ab-0` has no `title` attribute. Read `#ult-pct`'s text, keep hovering for 1500 ms, and read it again: it has changed, so the battle is not paused.
-     7. **Map boon:** set the save (`localStorage` key `emberfall-save-v1`) to have `boons: ["keen-edge"]` and `stage: 1`, reload, click `[data-nav="map"]` and hover `[data-tip="boon:keen-edge"]`. The card contains `Keen Edge` and `Common boon`.
-     8. **Phone:** in a new context with `isMobile: true`, `hasTouch: true` and viewport 390×844, open the class screen. The first `.skill-tip` of the Warden card is visible (inline). Tap `[data-tip="skill:warden:0"]`: no `.hovercard` becomes visible within 300 ms.
-   - Print `hovercard-check: N/N pass` last and exit 1 on any failure. Close the browser and the server in every case.
+6. **Realm events (`src/realm-events.ts`):**
+   - Export `class RealmEvents` with:
+     - `constructor(kind: ParticleKind, accent: string)`;
+     - `update(dt: number, battle: Battle)`, where `dt` is battle time;
+     - `draw(ctx: CanvasRenderingContext2D, time: number)`, in design coordinates (960×540);
+     - `hit(x: number, y: number): boolean`, in design coordinates;
+     - `forceEvent(kind?: ParticleKind): void`;
+     - read-only `spark: { x: number; y: number; age: number } | null`;
+     - read-only `eventsPlayed: number`.
+   - **Schedule:** the first event at 10 s of battle time, then every `12 + ((index * 7) % 5) - 2` seconds. Nothing is scheduled once `battle.ended`.
+   - **Event visuals.** Each lasts 2.5 s, uses `Math.random` freely (visual only), and shows its name as small top-centre canvas text (display font, 18 px, `#f3e2c0`, fading over 1.6 s):
+     - `ember`: **Ember Rain**. 40 glowing embers fall diagonally across the arena, with a brief warm sky flash.
+     - `spore`: **Spore Bloom**. Six glowing puffs burst from random points along the floor (y ≈ 430–470), with spores drifting up.
+     - `snow`: **Shardfall**. Ice shards fall vertically with light streaks, with a brief cold flash.
+     - `bubble`: **Tide Surge**. A translucent teal wave band sweeps left to right across the floor, with rising bubbles.
+     - `ash`: **Void Rift**. A purple tear opens mid-air near the centre, with swirling ash, and closes after 2.5 s.
+   - **Spark:**
+     - At an event's end, if there's no spark, spawn one at a random point with x in [300, 660] and y in [300, 420].
+     - It's drawn as a pulsing orb in `accent` with a soft halo and a small 4-point star, bobbing ±4 px.
+     - It lasts 5 s, fading over the last 1 s. At most one at a time.
+     - `hit(x, y)` returns true (and collects the spark) when the point is within 34 design px of it. Collecting plays a burst ring and a `+15 Ultimate` floating text drawn by `RealmEvents`.
 
-7. Add the script `"check:hover": "npm run build && node tools/hovercard-check.mjs"` to `package.json`.
+7. **Wiring (`src/art.ts` and `src/main.ts`):**
+   - `SceneRenderer` gets `setRealmEvents(ev: RealmEvents | null)` and draws `ev.draw(ctx, this.time)` after the units and before the floaters, inside the design transform.
+   - It also gets `toDesign(clientX, clientY): { x, y }` and `toClient(x, y): { x, y }`. Both use the same `s`, `ox` and `oy` as `draw`, accounting for the canvas's device-pixel scale and its bounding rect.
+   - In `startBattle`, create `new RealmEvents(location.particle, location.palette.accent)`, hand it to the renderer, and reset it on restart.
+   - In the loop, advance it with the same battle-time steps as `battle.update`, and only when the battle is not paused, no modal is open and the battle hasn't ended.
+   - On `pointerdown` on the arena canvas, convert to design coordinates. If `realmEvents.hit` returns true: call `battle.grantUltCharge(15)`, play `audio.sfx('heal')` and call `ev.preventDefault()`. Do nothing while paused.
+   - On `pointermove`, set the canvas cursor to `pointer` when within 34 px of a spark, otherwise reset it.
+
+8. **Debug hook (`src/main.ts`):** when `location.search` contains `debug=1`, keep `window.__emberfall = { battle, renderer, realmEvents, audio }` up to date at every battle start. Nothing else changes in debug mode.
+
+9. **`tools/battle-fx-check.mjs`** (Node ESM, `playwright-core`, Node built-ins otherwise):
+   - Serve `dist/` with a `node:http` static server on an ephemeral port.
+   - Launch Chromium headless with `args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required']` and `executablePath` set to `process.env.CHROMIUM_PATH` or the first that exists of `/usr/lib64/chromium-browser/chromium-browser`, `/usr/bin/chromium-browser`, `/usr/bin/chromium`. The viewport is 1280×800.
+   - Collect page errors throughout. Open `/?debug=1`, click `[data-nav="classes"]`, click `[data-choose="warden"]` and wait 1200 ms. Then print `PASS`/`FAIL` with a detail for each check:
+     1. **Speed cycles:** clicking `#speed-btn` three times gives the labels `2×`, `3×`, `1×` in turn.
+     2. **Speed persists:** set it to `3×` (two clicks), reload `/?debug=1`, click `[data-nav="map"]`, then the first `.btn[data-battle]`, and wait 1200 ms. `#speed-btn` reads `3×`. Set it back to `1×` with one click.
+     3. **No enrage before 30 s:** `#enrage-chip` is hidden and `__emberfall.renderer.enrageStartedAt === null`.
+     4. **Enrage shows:** set `__emberfall.battle.time = 36` and wait 600 ms. `#enrage-chip` is visible, `#enrage-mult` matches `/^×1\.[0-9]$/`, `enrageStartedAt !== null`, and `__emberfall.audio.intensity === true`. Save a screenshot of the arena to `sprite-out/fx-enrage.png`.
+     5. **Events play:** for each kind in `['ember', 'spore', 'snow', 'bubble', 'ash']`, call `__emberfall.realmEvents.forceEvent(kind)`, wait 1200 ms, screenshot the arena to `sprite-out/fx-<kind>.png`, and wait another 1600 ms. Afterwards `eventsPlayed >= 5` and no page errors occurred.
+     6. **A spark appears:** after check 5, `realmEvents.spark` is not null (force one more event and wait 2700 ms if needed).
+     7. **A miss doesn't collect:** read `battle.hero.ultCharge`, then click the arena at the point that `renderer.toClient` gives for a design point 150 px left of the spark. The spark still exists.
+     8. **Collecting a spark:** set `battle.hero.ultCharge = 10`, then click at `renderer.toClient(spark.x, spark.y)`. Within 300 ms the spark is null and `ultCharge >= 24`.
+     9. **No page errors** over the whole run.
+   - Print `battle-fx-check: N/N pass` last and exit 1 on any failure. Always close the browser and the server.
+
+10. Add the script `"check:fx": "npm run build && node tools/battle-fx-check.mjs"` to `package.json`.
 
 ## Acceptance
 
+- `npm run check:fx` exits 0 and its last line is `battle-fx-check: 9/9 pass`.
 - `npm run check:hover` exits 0 and its last line is `hovercard-check: 8/8 pass`.
 - `npm run sprites` exits 0 and its last line is `sprites: 25/25 pass`.
-- `grep -nE 'class="ability"[^>]*title=|class="boon-pill"[^>]*title=' src/ui.ts` prints nothing.
-- `npm test` prints `2 of 11 targets fail:` listing exactly `boss-retry` and `parity` (unchanged).
+- `npm test` prints `2 of 11 targets fail:` listing exactly `boss-retry` and `parity` (balance unchanged).
+- `test -f sprite-out/fx-enrage.png && test -f sprite-out/fx-ember.png && test -f sprite-out/fx-ash.png` exits 0.
 
 ## Parallel work
 
@@ -111,16 +115,16 @@ None — do it sequentially.
 
 - Do not commit, push, or switch branches.
 - A step may touch a file outside **Files to touch** when it has to. List every such file in the report under "outside the plan", one line each saying why.
-- The only checks to run are the **Acceptance** commands. Do not write or run extra end-to-end tests. The check script's own static server is the only server allowed; do not start a dev server. If something outside Acceptance fails, note it in the report and finish.
-- No click-to-open behaviour, no modal, and no change to battle pausing. Hover and focus only.
-- Do not change game data, combat, balance, sprites, art or audio code.
+- The only checks to run are the **Acceptance** commands. Do not write or run extra end-to-end tests. The check scripts' own static servers are the only servers allowed; do not start a dev server. If something outside Acceptance fails, note it in the report and finish.
+- No balance changes: don't change `src/balance.ts`, `src/data.ts`, enemy or hero numbers, or any combat rule beyond the three additions in step 2. Realm events deal no damage and apply no status.
+- Do not change the sprites, unit art, hover card or audio menu.
 
 ## Out of scope
 
-- Tooltips on stage nodes, the audio menu or any other element not listed in **Goal**.
-- New information about skills beyond what `src/data.ts` defines (no hero-specific damage numbers).
+- Boss telegraphs or new boss mechanics, combo counters, slow motion or screen shake changes.
+- Changes to tools/balance or the balance targets.
 
 ## If blocked
 
 - If Chromium will not launch, try `dnf install -y chromium` once. If it still fails, stop and report.
-- If check 6's ult-percentage text doesn't change because the ultimate is already full, read the battle's elapsed time from any other on-screen value that advances (for example the wave chip or an HP bar width). Report which one was used.
+- If `battle.time` cannot be set from the page because the build renames or freezes it, add the smallest debug-only setter on the `window.__emberfall` object and report it.

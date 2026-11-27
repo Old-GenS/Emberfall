@@ -304,8 +304,9 @@ export function renderBattle(info: BattleUIInfo): string {
         </div>
         <div class="battle-controls">
           <div class="wave-chip">${icon('skull')} <span id="wave-count">${boss ? 'Boss' : 'Wave'}</span></div>
+          <div class="wave-chip enrage-chip" id="enrage-chip" hidden>${icon('flame')} <span id="enrage-mult">×1.0</span></div>
           <button class="btn-icon" id="pause-btn" title="Pause (Esc)">${icon('pause')}</button>
-          <button class="btn-icon speed-btn" id="speed-btn" title="Toggle battle speed" style="font-size:11px;font-weight:700">1×</button>
+          <button class="btn-icon speed-btn ${save.battleSpeed > 1 ? 'active' : ''}" id="speed-btn" title="Toggle battle speed" style="font-size:11px;font-weight:700">${save.battleSpeed}×</button>
           ${audioMenu(save)}
         </div>
       </div>
