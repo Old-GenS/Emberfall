@@ -84,6 +84,9 @@ function sfx(name: string): void {
 /* -------------------------------- rendering -------------------------------- */
 
 function render(html: string): void {
+  // The battle locks page scrolling (body.in-battle). Winning goes battle → reward → map without
+  // stopBattle(), so every non-battle screen drops the lock here, or the phone can't scroll.
+  if (screen !== 'battle') document.body.classList.remove('in-battle');
   app.innerHTML = html;
   modalOpen = false;
   window.scrollTo({ top: 0 });
