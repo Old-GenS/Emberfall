@@ -56,7 +56,7 @@ export const BALANCE = {
     bonusShield: 0.04,    // warden: shield of maxHp × this
     bonusHeal: 0.06,    // spiritcaller: heal maxHp × this
     bonusCounter: 3,  // shadowblade: counter-hit of atk × this, forced crit
-    bonusBurnDuration: 4, bonusBurnPower: 0.8, // pyromancer: burn of atk × power per second
+    bonusBurnDuration: 4, bonusBurnPower: 1.1, // pyromancer: burn of atk × power per second
   },
   combat: {
     enrageAt: 30, enrageRamp: 0.12,          // after this many seconds, all damage grows by ramp per second
