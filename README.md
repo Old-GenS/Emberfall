@@ -2,7 +2,7 @@
 
 A handcrafted, single-page browser RPG and auto-battler. Choose one of four heroes, cross five ruined realms, collect boons, and put the Ashen King back in the ground.
 
-**Play:** once the included GitHub Pages workflow finishes, the game is live at the Pages URL for this repository (for project sites, typically `https://<owner>.github.io/ds-rpg/`).
+**Play:** once the included GitHub Pages workflow finishes, the game is live at the Pages URL for this repository (https://old-gens.github.io/Emberfall/).
 
 Everything you see and hear is original and generated at runtime: no external images, sprites, audio files, or fonts. The art is procedural canvas/SVG, and the soundtrack is synthesized live with the Web Audio API.
 
