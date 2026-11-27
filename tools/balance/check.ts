@@ -50,6 +50,10 @@ export function evaluateTargets(x: Matrix): Verdict[] {
     perClass((c) => `${m(x, R, c).firstTryNormalPct.toFixed(0)}%`), every((c) => m(x, R, c).firstTryNormalPct >= 90));
   add('normal-teeth', 'Normal fights cost real health', 'A normal stage that never dents the hero’s health is a formality, and a heavy you can ignore is not a decision. Winning should still hurt.', 'lowest health in a won first-try normal fight: mean 35–85%, each class',
     perClass((c) => `${m(x, R, c).hpLeftNormalPct.toFixed(0)}%`), every((c) => m(x, R, c).hpLeftNormalPct >= 35 && m(x, R, c).hpLeftNormalPct <= 85));
+  // A class only gets a say once it has played enough elite nodes; a handful of fights is noise.
+  add('elite-fair', 'Elites are a fair gamble', 'An elite already costs more than a normal fight: it should be a risk a Regular player takes on purpose, not a wall and not free.', 'first-try 60–95%, each class (≥ 20 elite fights)',
+    perClass((c) => (m(x, R, c).eliteFights >= 20 ? `${m(x, R, c).eliteFirstTryPct.toFixed(0)}%` : 'too few')),
+    every((c) => m(x, R, c).eliteFights < 20 || (m(x, R, c).eliteFirstTryPct >= 60 && m(x, R, c).eliteFirstTryPct <= 95)));
   add('attrition', 'Health carries weight', 'A realm is one stretch of road: sloppy normal fights should leave you weaker at the boss, but never hopeless.', 'mean health entering first-try boss fights 40–85%, each class',
     perClass((c) => `${m(x, R, c).bossEntryHpPct.toFixed(0)}%`), every((c) => m(x, R, c).bossEntryHpPct >= 40 && m(x, R, c).bossEntryHpPct <= 85));
   const walls = [...x.values()].flatMap((cm) => [...cm.values()].filter((r) => r.walled > 0).map((r) => `${r.tier}/${r.classId}:${r.walled}`));

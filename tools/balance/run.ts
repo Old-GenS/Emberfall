@@ -6,10 +6,10 @@
  * a retry, a boon after every win, Rally reset on a win. What it adds is the bot policies (which
  * boon, when to fire the ultimate, when to guard) and bookkeeping. No DOM, no renderer, no audio.
  */
-import { CLASSES, TOTAL_STAGES, buildWave, type ClassId } from '../../src/data';
+import { CLASSES, TOTAL_STAGES, buildNodeWave, buildWave, eventFor, nodeOffer, type ClassId, type NodeType } from '../../src/data';
 import { Battle } from '../../src/combat';
 import { BALANCE } from '../../src/balance';
-import { applyBoon, completeStage, getSave, heroStats, pickBoonChoices, resetSave, selectClass, startHpPct as startHpShare } from '../../src/state';
+import { applyBoon, choosePath, completeNonCombat, completeStage, currentNode, getSave, heroStats, needsPathChoice, pickBoonChoices, resetSave, resolveEvent, selectClass, shrineOffering, shrineRest, startHpPct as startHpShare } from '../../src/state';
 import { TIERS, chooseBoon, wantsUlt, type BoonPolicy, type GuardPolicy, type Tier, type UltPolicy } from './bots';
 import { hashSeed, seedRandom } from './rng';
 
@@ -21,6 +21,8 @@ export const MAX_RETRIES = 30;
 export interface FightRec {
   stage: number;
   boss: boolean;
+  /** The path node this fight belongs to: a normal fight, an elite, or the boss. */
+  node: NodeType | 'boss';
   /** 0 on the first try of a stage, then 1, 2, … while the bot keeps losing. */
   attempt: number;
   win: boolean;
@@ -48,17 +50,23 @@ export interface RunResult {
   boons: number;
   retries: number;
   walled: boolean;
+  /** Cleared node counts for the run, from the recorded path. */
+  elites: number;
+  shrines: number;
+  events: number;
   fights: FightRec[];
 }
 
 /** One battle, as main.ts's startBattle() sets it up, with the bot deciding on the ultimate and guard each step. */
-export function fight(classId: ClassId, stage: number, rally: number, ult: UltPolicy, guardPolicy: GuardPolicy): FightRec {
+export function fight(classId: ClassId, stage: number, node: 'fight' | 'elite' | 'boss', rally: number, ult: UltPolicy, guardPolicy: GuardPolicy): FightRec {
   const stats = heroStats();
   if (rally > 1) {
     stats.maxHp = Math.round(stats.maxHp * rally);
     stats.atk = Math.round(stats.atk * rally * 10) / 10;
   }
-  const b = new Battle(classId, stats, buildWave(stage, getSave().runSeed), stage);
+  const seed = getSave().runSeed;
+  const wave = node === 'boss' ? buildWave(stage, seed) : buildNodeWave(stage, seed, node);
+  const b = new Battle(classId, stats, wave, stage);
   b.hero.hp = Math.max(1, Math.round(b.hero.stats.maxHp * startHpShare(rally)));
   const startHpPct = 100 * (b.hero.hp / b.hero.stats.maxHp);
   let ults = 0;
@@ -91,12 +99,27 @@ export function fight(classId: ClassId, stage: number, rally: number, ult: UltPo
     if (fire && b.useUltimate()) ults++;
   }
   return {
-    stage, boss: stage % 5 === 4, attempt: 0, win: b.victory, dur: b.time, ults, ultReady, maxCharge,
+    stage, boss: stage % 5 === 4, node: node === 'boss' ? 'boss' : node, attempt: 0, win: b.victory, dur: b.time, ults, ultReady, maxCharge,
     hpLeftPct: b.victory && b.hero.alive ? 100 * lowHp : 0, // lowest health during a won fight
     startHpPct,
     endHpPct: b.victory && b.hero.alive ? 100 * (b.hero.hp / b.hero.stats.maxHp) : 0,
     perfect: b.guardStats.perfect, heavyTaken: b.guardStats.heavyTaken,
   };
+}
+
+/** Pick the next path node when the game asks for one, then return what is being played. */
+function chooseNode(tier: Tier): NodeType | 'boss' {
+  const save = getSave();
+  if (needsPathChoice()) {
+    const offered = nodeOffer(save.stage, save.runSeed);
+    const pick = tier.path.chooseNode(offered, save.hpPct);
+    if (!choosePath(pick) && !choosePath(offered[0])) {
+      throw new Error(`path policy picked "${pick}", which was not offered at stage ${save.stage}`);
+    }
+  }
+  const node = currentNode();
+  if (!node) throw new Error(`no node at stage ${getSave().stage}`);
+  return node;
 }
 
 /** One full run: from a fresh save to the ending or a wall, on one seed. */
@@ -109,19 +132,39 @@ export function playRun(classId: ClassId, tier: Tier, seed: number, maxRetries =
   let walled = false;
   while (getSave().stage < TOTAL_STAGES) {
     const stage = getSave().stage;
+    const node = chooseNode(tier);
+    if (node === 'shrine') {
+      // A shrine is a choice, not a fight: Rest heals, Offering pays health for a rare boon.
+      if (tier.path.chooseShrine(getSave().hpPct) === 'offering') {
+        shrineOffering();
+        completeNonCombat();
+        takeBoon(tier.boons, classId, 'rare');
+      } else {
+        shrineRest();
+        completeNonCombat();
+      }
+      continue;
+    }
+    if (node === 'event') {
+      const event = eventFor(stage, getSave().runSeed);
+      const outcome = resolveEvent(tier.path.chooseEvent(event, getSave().hpPct));
+      completeNonCombat(outcome.xpShare);
+      if (outcome.boon) takeBoon(tier.boons, classId, outcome.boon);
+      continue;
+    }
     let attempt = 0;
-    let rec = fight(classId, stage, rally, tier.ult, tier.guard);
+    let rec = fight(classId, stage, node, rally, tier.ult, tier.guard);
     rec.attempt = 0;
     fights.push(rec);
     while (!rec.win && attempt + 1 < maxRetries) {
       attempt++;
       rally = Math.min(BALANCE.rally.cap, rally + BALANCE.rally.step);
-      rec = { ...fight(classId, stage, rally, tier.ult, tier.guard), attempt };
+      rec = { ...fight(classId, stage, node, rally, tier.ult, tier.guard), attempt };
       fights.push(rec);
     }
     if (!rec.win) { walled = true; break; }
     completeStage(rec.endHpPct / 100);
-    takeBoon(tier.boons, classId);
+    takeBoon(tier.boons, classId, node === 'elite' ? 'rare' : undefined);
     rally = 1;
   }
   const save = getSave();
@@ -129,14 +172,18 @@ export function playRun(classId: ClassId, tier: Tier, seed: number, maxRetries =
     tier: tier.id, classId, seed,
     completed: save.stage >= TOTAL_STAGES, stageReached: save.stage,
     finalLevel: save.level, boons: save.boons.length,
-    retries: fights.filter((f) => !f.win).length, walled, fights,
+    retries: fights.filter((f) => !f.win).length, walled,
+    elites: save.path.filter((p) => p === 'elite').length,
+    shrines: save.path.filter((p) => p === 'shrine').length,
+    events: save.path.filter((p) => p === 'event').length,
+    fights,
   };
 }
 
 /** The boon step after a win: three offers, the policy picks one, or skips (the UI's "Skip Boon"). */
-function takeBoon(policy: BoonPolicy, classId: ClassId): void {
+function takeBoon(policy: BoonPolicy, classId: ClassId, minRarity?: 'rare' | 'epic'): void {
   if (policy === 'skip') return;
-  const offered = pickBoonChoices();
+  const offered = pickBoonChoices(3, [], minRarity);
   const pick = chooseBoon(policy, classId, heroStats(), offered);
   if (pick) applyBoon(pick.id);
 }
@@ -162,6 +209,13 @@ export interface ClassMetrics {
   walled: number;
   firstTryNormalPct: number;
   firstTryBossPct: number;
+  /** First-try win share on elite nodes, and how many first attempts that share is over. */
+  eliteFirstTryPct: number;
+  eliteFights: number;
+  /** Mean cleared nodes per run. */
+  elites: number;
+  shrines: number;
+  events: number;
   ultReadyNormalPct: number;
   ultReadyBossPct: number;
   ultsPerFight: number;
@@ -184,8 +238,9 @@ const win1 = (f: FightRec) => f.attempt === 0 && f.win;
 /** Tier × class numbers from a set of runs that all share a tier and a class. */
 export function summarize(tier: string, classId: ClassId, runs: RunResult[]): ClassMetrics {
   const first = runs.flatMap((r) => r.fights.filter((f) => f.attempt === 0));
-  const normal = first.filter((f) => !f.boss);
+  const normal = first.filter((f) => !f.boss && f.node !== 'elite');
   const boss = first.filter((f) => f.boss);
+  const elite = first.filter((f) => f.node === 'elite');
   const bossWin = boss.filter(win1);
   const bossWinDur = bossWin.map((f) => f.dur);
   return {
@@ -196,6 +251,11 @@ export function summarize(tier: string, classId: ClassId, runs: RunResult[]): Cl
     walled: runs.filter((r) => r.walled).length,
     firstTryNormalPct: pct(normal.filter(win1).length, normal.length),
     firstTryBossPct: pct(boss.filter(win1).length, boss.length),
+    eliteFirstTryPct: pct(elite.filter(win1).length, elite.length),
+    eliteFights: elite.length,
+    elites: mean(runs.map((r) => r.elites)),
+    shrines: mean(runs.map((r) => r.shrines)),
+    events: mean(runs.map((r) => r.events)),
     ultReadyNormalPct: pct(normal.filter((f) => f.ultReady).length, normal.length),
     ultReadyBossPct: pct(boss.filter((f) => f.ultReady).length, boss.length),
     ultsPerFight: mean(first.map((f) => f.ults)),

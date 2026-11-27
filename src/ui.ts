@@ -1,6 +1,6 @@
-import { AFFIXES, BOONS, CLASSES, LOCATIONS, type ClassDef, type IconName, type LocationDef, TOTAL_STAGES, buildWave, classById, stageInfo } from './data';
+import { AFFIXES, BOONS, CLASSES, LOCATIONS, type ClassDef, type EventDef, type IconName, type LocationDef, type NodeType, TOTAL_STAGES, buildNodeWave, buildWave, classById, nodeOffer, stageInfo } from './data';
 import { classPortraitSVG, locationEmblemSVG, preloadArtAssets, DESIGN_W, DESIGN_H } from './art';
-import { type SaveData, getSave, heroStats, levelLabel, xpProgress, isVictory, stageRewardXp } from './state';
+import { type SaveData, getSave, heroStats, levelLabel, xpProgress, isVictory, needsPathChoice, currentNode, stageRewardXp } from './state';
 
 preloadArtAssets();
 
@@ -193,6 +193,46 @@ function boonPills(ids: string[]): string {
   return `<details class="boon-details"${touchDevice() ? '' : ' open'}><summary>Arcana Boons · ${ids.length}</summary><div class="boon-list">${pills}</div></details>`;
 }
 
+/** The four road nodes: label, icon, one-line description and the reward line on the path card. */
+const NODE_META: Record<NodeType, { name: string; icon: IconName; desc: string; reward: string }> = {
+  fight: {
+    name: 'Fight',
+    icon: 'sword',
+    desc: 'The next wave stands in the road, exactly as the realm deals it.',
+    reward: 'Boon pick · stage XP',
+  },
+  elite: {
+    name: 'Elite',
+    icon: 'skull',
+    desc: 'A realm champion and its escort bar the way. Harder — and worth more.',
+    reward: 'Rare boon · +50% XP',
+  },
+  shrine: {
+    name: 'Shrine',
+    icon: 'flame',
+    desc: 'A quiet roadside altar. Mend what the road has taken, or bargain for power.',
+    reward: 'Rest or make an offering',
+  },
+  event: {
+    name: 'Event',
+    icon: 'star',
+    desc: 'Something waits at the edge of the firelight. It has been waiting a while.',
+    reward: 'Something stirs ahead…',
+  },
+};
+
+const NODE_ICON: Record<string, IconName> = { fight: 'sword', elite: 'skull', shrine: 'flame', event: 'star', boss: 'crown' };
+
+const healthLine = (save: SaveData): string => `<div class="path-health">
+  <span>${icon('heart')} Health carried</span>
+  <div class="hp-bar path-hp-bar"><span style="width:${(save.hpPct * 100).toFixed(1)}%"></span></div>
+  <b>${Math.round(save.hpPct * 100)}%</b>
+</div>`;
+
+function realmStep(stage: number): { realm: string; step: number } {
+  return { realm: ROMAN_REALMS[Math.floor(stage / 5)] ?? String(Math.floor(stage / 5) + 1), step: (stage % 5) + 1 };
+}
+
 function realmCard(loc: LocationDef, idx: number, save: SaveData): string {
   const base = idx * 5;
   const currentLoc = Math.min(Math.floor(save.stage / 5), LOCATIONS.length - 1);
@@ -203,12 +243,18 @@ function realmCard(loc: LocationDef, idx: number, save: SaveData): string {
     const g = base + i;
     const isDone = g < save.stage;
     const isNext = g === save.stage && !done;
-    const cls = `stage-node${isDone ? ' done' : ''}${isNext ? ' next' : ''}${i === 4 ? ' boss-node' : ''}`;
-    const title = `${i + 1}. ${name}${isNext ? ' — your next battle' : ''}`;
+    const played = isDone ? save.path[g] : undefined;
+    const cls = `stage-node${isDone ? ' done' : ''}${isNext ? ' next' : ''}${i === 4 ? ' boss-node' : ''}${played ? ` stage-node-${played}` : ''}`;
+    const nodeAttr = played ? ` data-node="${played}"` : '';
+    const nodeName = played ? (played === 'boss' ? 'Boss' : NODE_META[played as NodeType]?.name ?? played) : '';
+    const title = `${i + 1}. ${name}${played ? ` — ${nodeName}` : ''}${isNext ? ' — your next battle' : ''}`;
     if (isNext) {
       return `<button class="${cls}" data-battle="${g}" title="${title}" aria-label="Fight: ${name}">${i === 4 ? icon('crown') : i + 1}</button>`;
     }
-    return `<div class="${cls}" title="${title}">${isDone ? (i === 4 ? icon('crown') : '✓') : (i === 4 ? icon('crown') : i + 1)}</div>`;
+    const mark = isDone
+      ? icon(NODE_ICON[played ?? (i === 4 ? 'boss' : 'fight')] ?? 'sword')
+      : (i === 4 ? icon('crown') : i + 1);
+    return `<div class="${cls}"${nodeAttr} title="${title}">${mark}</div>`;
   });
   const connectors = nodes.map((n, i) => i === 0 ? n : `<span class="stage-link ${base + i - 1 < save.stage ? 'done' : ''}"></span>${n}`).join('');
   return `<article class="realm-card card ${isCurrent ? 'current' : ''} ${locked ? 'locked' : ''}" style="--realm:${loc.palette.accent}">
@@ -234,8 +280,12 @@ export function renderMap(save: SaveData): string {
   const s = heroStats();
   const xp = xpProgress();
   const loc = stageInfo(Math.min(save.stage, 24)).location;
-  const wave = save.stage < TOTAL_STAGES ? buildWave(save.stage, save.runSeed) : [];
+  const node = currentNode();
+  const wave = save.stage < TOTAL_STAGES
+    ? (node === 'elite' ? buildNodeWave(save.stage, save.runSeed, 'elite') : buildWave(save.stage, save.runSeed))
+    : [];
   const bossStage = save.stage % 5 === 4;
+  const choosing = needsPathChoice();
   const wavePreview = wave.map(w => {
     const affix = w.affix ? AFFIXES.find(a => a.id === w.affix) : null;
     return affix ? `<span class="affix" title="${affix.desc}">${w.name}</span>` : w.name;
@@ -274,9 +324,122 @@ export function renderMap(save: SaveData): string {
         </aside>
         <div>
           <div class="realm-list">${LOCATIONS.map((l, i) => realmCard(l, i, save)).join('')}</div>
-          <div class="map-footer">Ahead: <b class="gold">${save.stage >= TOTAL_STAGES ? 'The Vale Breathes Anew' : loc.stageNames[save.stage % 5]}</b> · ${save.stage < TOTAL_STAGES ? wavePreview : 'Chronicle Complete'}</div>
+          <div class="map-footer">Ahead: <b class="gold">${save.stage >= TOTAL_STAGES ? 'The Vale Breathes Anew' : choosing ? 'Choose your road' : loc.stageNames[save.stage % 5]}</b>${save.stage < TOTAL_STAGES && !choosing ? ` · ${wavePreview}` : ''}</div>
         </div>
       </div>
+    </div>
+  </div>`;
+}
+
+/** The branching crossroads before steps 1-3. Exactly the two offered cards, in draw order. */
+export function renderPath(save: SaveData): string {
+  const { realm, step } = realmStep(save.stage);
+  const loc = stageInfo(save.stage).location;
+  const offer = nodeOffer(save.stage, save.runSeed);
+  return `<div class="screen path-screen">
+    <div class="screen-inner path-inner">
+      <div class="top-bar">
+        <div class="brand"><div class="mark">${EMBLEM}</div><h1>Emberfall <span>The Road Divides</span></h1></div>
+        <div class="top-actions"><button class="btn ghost small" data-nav="map">Back to Atlas</button></div>
+      </div>
+      <div class="path-head">
+        <div class="overline">✦ Realm ${realm} · Step ${step} of 5 ✦</div>
+        <h1>Choose your road</h1>
+        <p>${loc.name} stretches ahead. Two ways open; only one can be walked.</p>
+        ${healthLine(save)}
+      </div>
+      <div class="path-grid">
+        ${offer.map((type, i) => {
+          const meta = NODE_META[type];
+          return `<button class="path-card path-card-${type}" data-node="${type}" style="animation-delay:${i * 0.08}s">
+            <div class="path-icon">${icon(meta.icon)}</div>
+            <div class="path-copy">
+              <div class="path-kicker">${type === 'shrine' || type === 'event' ? 'No battle' : 'Battle'}</div>
+              <h2>${meta.name}</h2>
+              <p>${meta.desc}</p>
+              <div class="path-reward">${icon('star')}<span>${meta.reward}</span></div>
+            </div>
+            <div class="path-go" aria-hidden="true">→</div>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="path-foot">❖ &nbsp; The offer is fixed for this run and this step &nbsp; ❖</div>
+    </div>
+  </div>`;
+}
+
+/** A shrine stop: rest for health, or pay health for a rare-or-better boon. */
+export function renderShrine(save: SaveData): string {
+  const { realm, step } = realmStep(save.stage);
+  const loc = stageInfo(save.stage).location;
+  return `<div class="screen shrine-screen">
+    <div class="screen-inner path-inner">
+      <div class="top-bar">
+        <div class="brand"><div class="mark">${EMBLEM}</div><h1>Emberfall <span>A Wayside Shrine</span></h1></div>
+      </div>
+      <div class="path-head">
+        <div class="overline">✦ Realm ${realm} · Step ${step} of 5 ✦</div>
+        <h1>The Shrine</h1>
+        <p>${loc.name} keeps one quiet altar. Its flame asks for a choice, not a prayer.</p>
+        ${healthLine(save)}
+      </div>
+      <div class="path-grid shrine-grid">
+        <button class="path-card path-card-shrine" data-shrine="rest">
+          <div class="path-icon">${icon('heart')}</div>
+          <div class="path-copy">
+            <div class="path-kicker">Mend</div>
+            <h2>Rest: heal 35%</h2>
+            <p>Sleep beside the flame. The road can wait a little longer.</p>
+            <div class="path-reward">${icon('heart')}<span>+35% health</span></div>
+          </div>
+          <div class="path-go" aria-hidden="true">→</div>
+        </button>
+        <button class="path-card path-card-offering" data-shrine="offering">
+          <div class="path-icon">${icon('flame')}</div>
+          <div class="path-copy">
+            <div class="path-kicker">Bargain</div>
+            <h2>Offering: −20% health, rare boon</h2>
+            <p>Feed the flame something that still beats. It returns a rarer gift.</p>
+            <div class="path-reward">${icon('star')}<span>Rare-or-better boon</span></div>
+          </div>
+          <div class="path-go" aria-hidden="true">→</div>
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+export interface EventOutcome { text: string; boon: null | 'rare' | 'epic'; xpShare: number }
+
+/** An event stop: the scene, its two choices, then the resolved text and a Continue button. */
+export function renderEvent(save: SaveData, event: EventDef, outcome: EventOutcome | null): string {
+  const { realm, step } = realmStep(save.stage);
+  const loc = stageInfo(save.stage).location;
+  const body = outcome
+    ? `<p class="event-text">${outcome.text}</p>
+       ${outcome.boon ? `<div class="path-reward event-reward">${icon('star')}<span>${outcome.boon === 'epic' ? 'Epic' : 'Rare'}-or-better boon awaits</span></div>` : ''}
+       <div class="event-actions"><button class="btn primary" data-event-continue>Continue &nbsp;→</button></div>`
+    : `<p class="event-text">${event.text}</p>
+       <div class="event-choices">
+         ${event.choices.map((choice, i) => `<button class="event-choice" data-event-choice="${choice.id}" style="animation-delay:${i * 0.08}s">
+           <b>${choice.label}</b>
+           <span>${choice.desc}</span>
+         </button>`).join('')}
+       </div>`;
+  return `<div class="screen event-screen">
+    <div class="screen-inner path-inner">
+      <div class="top-bar">
+        <div class="brand"><div class="mark">${EMBLEM}</div><h1>Emberfall <span>A Wayside Encounter</span></h1></div>
+      </div>
+      <div class="path-head">
+        <div class="overline">✦ Realm ${realm} · Step ${step} of 5 ✦</div>
+        <p class="event-loc">${loc.name}</p>
+      </div>
+      <article class="event-card card">
+        <div class="event-numeral" aria-hidden="true">✦</div>
+        <h1>${event.title}</h1>
+        ${body}
+      </article>
     </div>
   </div>`;
 }

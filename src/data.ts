@@ -404,3 +404,105 @@ export function buildWave(globalStage: number, runSeed: number): EnemyInstance[]
   }
   return out;
 }
+
+/* ---------------------------- Branching path ------------------------------ */
+
+export type NodeType = 'fight' | 'elite' | 'shrine' | 'event';
+
+export interface EventChoice { id: string; label: string; desc: string }
+export interface EventDef {
+  id: 'merchant' | 'reliquary' | 'pilgrim';
+  title: string;
+  text: string;
+  choices: [EventChoice, EventChoice];
+}
+
+export const EVENTS: EventDef[] = [
+  {
+    id: 'merchant',
+    title: 'The Ash Merchant',
+    text: 'A figure in a burnt travelling coat waits beside a cart of black glass. "Everything has a price on this road," it says. "Yours is still beating."',
+    choices: [
+      { id: 'trade', label: 'Pay in blood', desc: 'Lose 25% health, then draw a rare-or-better boon.' },
+      { id: 'leave', label: 'Leave', desc: 'Keep your blood and walk on.' },
+    ],
+  },
+  {
+    id: 'reliquary',
+    title: 'A Cursed Reliquary',
+    text: 'A reliquary of smoke-dark glass hums at the roadside. Something inside it turns toward you, patient and hungry.',
+    choices: [
+      { id: 'open', label: 'Open it', desc: 'A chance at an epic boon — or lose 30% health.' },
+      { id: 'leave', label: 'Leave', desc: 'Some doors are best left shut.' },
+    ],
+  },
+  {
+    id: 'pilgrim',
+    title: 'The Wounded Pilgrim',
+    text: 'A pilgrim sits against a milestone, blood blackening on their robes. They look up without fear. "You have the look of someone still walking," they say.',
+    choices: [
+      { id: 'tend', label: 'Tend the wound', desc: 'Gain the stage\'s full XP.' },
+      { id: 'pray', label: 'Pray with them', desc: 'Heal 20% health.' },
+    ],
+  },
+];
+
+/** Two distinct node types offered before steps 1-3; none before step 0 or the boss. */
+export function nodeOffer(globalStage: number, runSeed: number): NodeType[] {
+  const step = globalStage % 5;
+  if (step === 0 || step === 4) return [];
+  const P = BALANCE.path;
+  const weights: Record<NodeType, number> = {
+    fight: P.weights.fight,
+    elite: P.weights.elite,
+    shrine: P.weights.shrine * (step === 3 ? P.preBossShrine : 1),
+    event: P.weights.event,
+  };
+  const rand = seededRandom((runSeed >>> 0) * 131 + globalStage * 7907 + 3);
+  const types: NodeType[] = ['fight', 'elite', 'shrine', 'event'];
+  const draw = (pool: NodeType[]): NodeType => {
+    const total = pool.reduce((n, t) => n + weights[t], 0);
+    let r = rand() * total;
+    for (const t of pool) {
+      r -= weights[t];
+      if (r <= 0) return t;
+    }
+    return pool[pool.length - 1];
+  };
+  const first = draw(types);
+  const second = draw(types.filter(t => t !== first));
+  const combat = (t: NodeType): boolean => t === 'fight' || t === 'elite';
+  const offer = [first, second];
+  if (!combat(offer[0]) && !combat(offer[1])) offer[1] = 'fight';
+  return offer;
+}
+
+/** The wave for a fight or elite node. An elite node forces the realm elite and an affix, and is tougher. */
+export function buildNodeWave(globalStage: number, runSeed: number, node: 'fight' | 'elite'): EnemyInstance[] {
+  const wave = buildWave(globalStage, runSeed).map(w => ({ ...w }));
+  if (node === 'fight') return wave;
+  const { location } = stageInfo(globalStage);
+  const eliteDef = location.enemies[2];
+  let elite = wave.find(w => w.def.id === eliteDef.id);
+  if (!elite) {
+    elite = { def: eliteDef, name: eliteDef.name, hpScale: wave[0].hpScale, atkScale: wave[0].atkScale };
+    wave[0] = elite;
+  }
+  if (!elite.affix) {
+    const rand = seededRandom(runSeed * 61 + globalStage * 389 + 5);
+    const affix = AFFIXES[Math.floor(rand() * AFFIXES.length)];
+    elite.affix = affix.id;
+    elite.name = `${affix.name} ${elite.def.name}`;
+  }
+  for (const w of wave) {
+    w.hpScale *= BALANCE.path.eliteHp;
+    w.atkScale *= BALANCE.path.eliteAtk;
+  }
+  return wave;
+}
+
+/** The event waiting at an event node; seeded per run and stage. */
+export function eventFor(globalStage: number, runSeed: number): EventDef {
+  const rand = seededRandom(runSeed * 17 + globalStage * 1543 + 7);
+  return EVENTS[Math.floor(rand() * EVENTS.length)];
+}

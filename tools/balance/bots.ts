@@ -13,12 +13,22 @@
  * The scripted bots in drumline's balance.md are the model: simple rules, so a thinking player
  * should do at least as well as Sharp.
  */
-import { BOONS, classById, type BoonDef, type ClassId, type Stats } from '../../src/data';
+import { BOONS, classById, type BoonDef, type ClassId, type EventDef, type NodeType, type Stats } from '../../src/data';
 
 export type UltPolicy = 'never' | 'asap' | 'smart';
 export type BoonPolicy = 'skip' | 'random' | 'best';
 /** `sloppy` commits to the right timing with probability 0.65 and otherwise never presses for that telegraph. */
 export type GuardPolicy = 'never' | 'sloppy' | 'perfect';
+export type ShrineChoice = 'rest' | 'offering';
+
+/** What a tier does on the branching path: which node, and which shrine/event choice. */
+export interface PathPolicy {
+  /** Pick one of the two offered nodes. `hp` is the carried health share, 0..1. */
+  chooseNode(offered: NodeType[], hp: number): NodeType;
+  chooseShrine(hp: number): ShrineChoice;
+  /** The chosen event choice id. */
+  chooseEvent(event: EventDef, hp: number): string;
+}
 
 export interface Tier {
   id: string;
@@ -26,14 +36,52 @@ export interface Tier {
   boons: BoonPolicy;
   ult: UltPolicy;
   guard: GuardPolicy;
+  path: PathPolicy;
   blurb: string;
 }
 
+/* ------------------------------- path policies ------------------------------ */
+
+const regularPath: PathPolicy = {
+  chooseNode: (offered, hp) => {
+    if (offered.includes('shrine') && hp < 0.45) return 'shrine';
+    if (offered.includes('fight')) return 'fight';
+    if (offered.includes('elite')) return 'elite';
+    return offered[0];
+  },
+  chooseShrine: (hp) => (hp < 0.6 ? 'rest' : 'offering'),
+  chooseEvent: (event, hp) => {
+    if (event.id === 'merchant') return hp >= 0.6 ? 'trade' : 'leave';
+    if (event.id === 'reliquary') return hp >= 0.6 ? 'open' : 'leave';
+    return hp < 0.6 ? 'pray' : 'tend';
+  },
+};
+
+const sharpPath: PathPolicy = {
+  chooseNode: (offered, hp) => {
+    if (offered.includes('elite') && hp >= 0.7) return 'elite';
+    if (offered.includes('shrine') && hp < 0.5) return 'shrine';
+    if (offered.includes('fight')) return 'fight';
+    const combat = offered.find((t) => t === 'fight' || t === 'elite');
+    return combat ?? offered[0];
+  },
+  chooseShrine: regularPath.chooseShrine,
+  chooseEvent: regularPath.chooseEvent,
+};
+
 export const TIERS: Tier[] = [
-  { id: 'idle', label: 'Idle', boons: 'skip', ult: 'never', guard: 'never', blurb: 'Skips every boon, never uses the ultimate, never guards. The floor: if this wins, nothing the player does matters.' },
-  { id: 'casual', label: 'Casual', boons: 'random', ult: 'never', guard: 'never', blurb: 'Takes a random boon, never notices the ultimate button or the guard.' },
-  { id: 'regular', label: 'Regular', boons: 'random', ult: 'asap', guard: 'sloppy', blurb: 'Takes a random boon, presses the ultimate the moment it is ready, and catches most heavies with a sloppy guard.' },
-  { id: 'sharp', label: 'Sharp', boons: 'best', ult: 'smart', guard: 'perfect', blurb: 'Picks the boon that fits its class, holds the ultimate for a boss, a pack, or low health, and times every guard.' },
+  { id: 'idle', label: 'Idle', boons: 'skip', ult: 'never', guard: 'never', blurb: 'Skips every boon, never uses the ultimate, never guards. The floor: if this wins, nothing the player does matters.', path: {
+    chooseNode: (offered) => offered[0],
+    chooseShrine: () => 'rest',
+    chooseEvent: (event) => (event.id === 'pilgrim' ? 'pray' : 'leave'),
+  } },
+  { id: 'casual', label: 'Casual', boons: 'random', ult: 'never', guard: 'never', blurb: 'Takes a random boon, never notices the ultimate button or the guard.', path: {
+    chooseNode: (offered) => offered[Math.floor(Math.random() * offered.length)],
+    chooseShrine: () => (Math.random() < 0.5 ? 'rest' : 'offering'),
+    chooseEvent: (event) => event.choices[Math.floor(Math.random() * event.choices.length)].id,
+  } },
+  { id: 'regular', label: 'Regular', boons: 'random', ult: 'asap', guard: 'sloppy', path: regularPath, blurb: 'Takes a random boon, presses the ultimate the moment it is ready, and catches most heavies with a sloppy guard.' },
+  { id: 'sharp', label: 'Sharp', boons: 'best', ult: 'smart', guard: 'perfect', path: sharpPath, blurb: 'Picks the boon that fits its class, holds the ultimate for a boss, a pack, or low health, and times every guard.' },
 ];
 
 /* --------------------------------- ultimate -------------------------------- */

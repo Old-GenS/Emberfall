@@ -607,6 +607,103 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
 .lock-msg .icon { width: 14px; height: 14px; }
 .map-footer { text-align: center; font-family: var(--display); color: var(--faint); font-size: 10px; letter-spacing: .15em; text-transform: uppercase; padding: 24px 0 4px; }
 
+/* --------------------------- Branching Path ------------------------------- */
+.stage-node-elite { box-shadow: 0 0 0 2px rgba(255, 134, 74, 0.42); }
+.stage-node-shrine { box-shadow: 0 0 0 2px rgba(125, 255, 192, 0.32); }
+.stage-node-event { box-shadow: 0 0 0 2px rgba(216, 163, 255, 0.36); }
+.stage-node-boss { box-shadow: 0 0 0 2px rgba(255, 110, 96, 0.42); }
+
+.path-inner { max-width: 1080px; }
+.path-screen, .shrine-screen, .event-screen { justify-content: flex-start; }
+.path-head { text-align: center; margin: 8px auto 28px; max-width: 680px; width: 100%; }
+.path-head h1 { font-size: clamp(32px, 5vw, 52px); color: #ffe6a6; margin: 6px 0 8px; text-shadow: 0 0 36px rgba(233, 180, 75, .18); }
+.path-head p { font-family: var(--serif); font-size: 18px; color: #d4cae3; margin: 0 auto; }
+.path-health {
+  display: flex; align-items: center; gap: 12px; justify-content: center;
+  margin: 18px auto 0; max-width: 420px; padding: 9px 14px;
+  border: 1px solid var(--line-soft); border-radius: 7px; background: rgba(8, 5, 14, 0.6);
+}
+.path-health > span { display: flex; align-items: center; gap: 6px; font-family: var(--display); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.path-health > span .icon { width: 14px; height: 14px; color: #ff9a62; }
+.path-health b { font-family: var(--display); font-size: 14px; color: #ffb38a; white-space: nowrap; }
+.path-hp-bar { flex: 1; min-width: 70px; margin: 0; }
+.path-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;
+  width: 100%; max-width: 900px; margin: 0 auto;
+}
+.path-card {
+  appearance: none; cursor: pointer; text-align: left; position: relative; min-width: 0;
+  display: flex; align-items: flex-start; gap: 16px; padding: 22px 20px;
+  color: var(--ink); border: 1px solid var(--line); border-radius: 12px;
+  background: linear-gradient(165deg, rgba(26, 19, 40, 0.96), rgba(8, 6, 14, 0.99));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.62), inset 0 0 0 1px rgba(255, 232, 175, 0.05);
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), border-color .2s, box-shadow .2s;
+  animation: screenIn .4s cubic-bezier(.2,.8,.2,1) both;
+}
+.path-card:hover, .path-card:focus-visible {
+  transform: translateY(-4px); border-color: var(--gold-bright);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, .76), 0 0 34px rgba(233, 196, 106, .16);
+}
+.path-icon {
+  flex: 0 0 auto; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--gold-bright); border: 1px solid var(--line-strong);
+  background: radial-gradient(circle, rgba(233, 196, 106, 0.2), rgba(7, 5, 12, 0.88) 72%);
+}
+.path-icon .icon { width: 28px; height: 28px; }
+.path-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.path-kicker { font-family: var(--display); font-size: 8.5px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--faint); }
+.path-card h2 { font-size: clamp(19px, 2.2vw, 24px); color: #f8eedb; line-height: 1.12; }
+.path-card p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.path-reward {
+  display: flex; align-items: center; gap: 6px; margin-top: 2px;
+  font-family: var(--display); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-bright);
+}
+.path-reward .icon { width: 14px; height: 14px; color: var(--gold); flex: 0 0 auto; }
+.path-go {
+  position: absolute; right: 16px; bottom: 14px; color: var(--gold); opacity: .55;
+  font-size: 20px; line-height: 1; transition: transform .2s, opacity .2s;
+}
+.path-card:hover .path-go { transform: translateX(4px); opacity: 1; }
+.path-card-elite { border-color: rgba(255, 134, 74, 0.38); background: linear-gradient(165deg, rgba(48, 22, 18, 0.95), rgba(10, 6, 12, 0.99)); }
+.path-card-elite .path-icon { color: #ffc09a; border-color: rgba(255, 140, 90, .5); background: radial-gradient(circle, rgba(255, 110, 60, .26), rgba(12, 6, 10, .9) 72%); }
+.path-card-elite .path-kicker { color: #ff9a6a; }
+.path-card-shrine { border-color: rgba(125, 255, 192, 0.3); background: linear-gradient(165deg, rgba(14, 40, 32, 0.94), rgba(7, 11, 12, 0.99)); }
+.path-card-shrine .path-icon { color: #a9ffd4; border-color: rgba(125, 255, 192, .42); background: radial-gradient(circle, rgba(90, 220, 160, .2), rgba(5, 12, 10, .88) 72%); }
+.path-card-shrine .path-kicker { color: #7dffc0; }
+.path-card-offering { border-color: rgba(216, 163, 255, 0.32); background: linear-gradient(165deg, rgba(38, 20, 52, 0.94), rgba(9, 6, 14, 0.99)); }
+.path-card-offering .path-icon { color: #e6beff; border-color: rgba(216, 163, 255, .42); background: radial-gradient(circle, rgba(195, 110, 255, .22), rgba(9, 6, 14, .88) 72%); }
+.path-card-offering .path-kicker { color: #d8a3ff; }
+.path-card-event { border-color: rgba(216, 163, 255, 0.3); }
+.path-card-event .path-icon { color: #e6beff; border-color: rgba(216, 163, 255, .4); }
+.path-foot { text-align: center; margin-top: 30px; font-family: var(--display); font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); }
+.shrine-grid { max-width: 900px; }
+.path-card-offering h2 { font-size: clamp(17px, 2vw, 22px); }
+
+.event-screen { justify-content: center; }
+.event-screen .path-head { margin-bottom: 12px; }
+.event-loc { font-family: var(--display) !important; font-size: 11px !important; letter-spacing: .2em; text-transform: uppercase; color: var(--gold) !important; }
+.event-card { position: relative; width: 100%; max-width: 760px; margin: 0 auto; padding: clamp(24px, 4vw, 44px); text-align: center; overflow: hidden; }
+.event-numeral { color: var(--gold); opacity: .5; font-size: 15px; margin-bottom: 8px; }
+.event-card h1 { font-size: clamp(28px, 4.4vw, 44px); color: #ffe6a6; margin-bottom: 16px; }
+.event-text { font-family: var(--serif); font-size: clamp(17px, 2vw, 20px); line-height: 1.55; color: #ddd3e8; max-width: 620px; margin: 0 auto 24px; }
+.event-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-width: 640px; margin: 0 auto; }
+.event-choice {
+  appearance: none; cursor: pointer; text-align: left; min-width: 0; padding: 16px 17px;
+  display: flex; flex-direction: column; gap: 5px; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+  background: linear-gradient(165deg, rgba(28, 21, 44, 0.94), rgba(8, 6, 14, 0.99));
+  transition: transform .18s, border-color .18s, box-shadow .18s;
+  animation: screenIn .4s cubic-bezier(.2,.8,.2,1) both;
+}
+.event-choice:hover, .event-choice:focus-visible { transform: translateY(-3px); border-color: var(--gold-bright); box-shadow: 0 16px 40px rgba(0, 0, 0, .6); }
+.event-choice b { font-family: var(--display); font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold-bright); }
+.event-choice span { font-size: 12.5px; color: var(--muted); line-height: 1.42; }
+.event-actions { display: flex; justify-content: center; margin-top: 4px; }
+.event-reward { justify-content: center; margin: 0 auto 20px; }
+.elite-chip { color: #ffb38a; border-color: rgba(255, 130, 80, .48); background: rgba(255, 80, 40, .1); }
+.elite-chip b { color: #ffd0b3; }
+
+
 /* ------------------------------ Battle Screen ----------------------------- */
 .battle-screen { padding: calc(clamp(8px, 1.4vw, 18px) + var(--sat)) calc(clamp(8px, 1.4vw, 18px) + var(--sar)) calc(clamp(8px, 1.4vw, 18px) + var(--sab)) calc(clamp(8px, 1.4vw, 18px) + var(--sal)); align-items: center; justify-content: center; }
 .battle-shell {
@@ -950,6 +1047,20 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
   .stage-link { width: 10px; }
   .quest-info { display: none; }
   .boon-grid { grid-template-columns: 1fr; max-width: 420px; }
+  .path-grid, .event-choices { grid-template-columns: 1fr; max-width: 440px; }
+  .path-head { margin-bottom: 20px; }
+  .path-head h1 { font-size: clamp(28px, 8vw, 40px); }
+  .path-head p { font-size: 16px; }
+  .path-card { padding: 17px 15px; gap: 12px; }
+  .path-icon { width: 48px; height: 48px; }
+  .path-icon .icon { width: 24px; height: 24px; }
+  .path-go { right: 12px; bottom: 10px; }
+  .path-foot { margin-top: 20px; }
+  .event-card { padding: 22px 16px; }
+  .event-text { font-size: 16.5px; margin-bottom: 18px; }
+  .event-choice { padding: 13px 14px; }
+  .event-choice b { font-size: 11.5px; }
+  .event-choice span { font-size: 12px; }
   .boon-card { flex-direction: row; text-align: left; padding: 14px; gap: 14px; }
   .boon-tarot-top { display: none; }
   .boon-icon-wrap { width: 54px; height: 54px; flex: 0 0 auto; margin: 0; }
@@ -989,6 +1100,11 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
 @media (max-width: 400px) {
   .stage-link { width: 5px; }
   .stage-node { width: 30px; height: 30px; }
+  .path-health { gap: 8px; padding: 8px 10px; }
+  .path-health > span { font-size: 8.5px; letter-spacing: .08em; }
+  .path-card h2 { font-size: 17px; }
+  .path-card p { font-size: 12px; }
+  .event-text { font-size: 16px; }
   .game-logo { font-size: clamp(36px, 9.5vw, 50px); }
   .ult-info > span:not(.ult-pct), .guard-info > span:not(.guard-state):not(.k) { display: none; }
   /* The phone row stacks: dropping the labels keeps both controls on screen with no side scroll. */

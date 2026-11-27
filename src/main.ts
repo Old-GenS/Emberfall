@@ -1,6 +1,7 @@
 import './style.css';
 import {
-  BOONS, TOTAL_STAGES, buildWave, classById, stageInfo, type ClassId, type IconName,
+  BOONS, TOTAL_STAGES, buildNodeWave, buildWave, classById, eventFor, nodeOffer, stageInfo,
+  type ClassId, type EventDef, type IconName, type NodeType,
 } from './data';
 import { Battle, enrageMultiplier, type CombatEvent } from './combat';
 import { BALANCE } from './balance';
@@ -8,12 +9,13 @@ import { SceneRenderer } from './art';
 import { RealmEvents } from './realm-events';
 import { audio, type ThemeId } from './audio';
 import {
-  applyBoon, completeStage, getSave, hasHero, heroStats, isVictory, loadSave,
-  pickBoonChoices, resetSave, selectClass, startHpPct, updateSave, xpProgress,
+  applyBoon, choosePath, completeNonCombat, completeStage, currentNode, getSave, hasHero,
+  heroStats, isVictory, loadSave, needsPathChoice, pickBoonChoices, resetSave, resolveEvent,
+  selectClass, shrineOffering, shrineRest, startHpPct, updateSave, xpProgress,
 } from './state';
 import {
-  howToHTML, icon, renderBattle, renderClassSelect, renderMap, renderReward,
-  renderTitle, renderVictory, toastHTML,
+  howToHTML, icon, renderBattle, renderClassSelect, renderEvent, renderMap, renderPath,
+  renderReward, renderShrine, renderTitle, renderVictory, toastHTML, type EventOutcome,
 } from './ui';
 import { initHovercard } from './hovercard';
 import { initPwa } from './pwa';
@@ -22,7 +24,7 @@ const app = document.getElementById('app')!;
 /** Phones and tablets: wording and layout differ (see the (hover: none) rules in style.css). */
 const touch = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
 
-type Screen = 'title' | 'classes' | 'map' | 'battle' | 'reward' | 'victory';
+type Screen = 'title' | 'classes' | 'map' | 'path' | 'shrine' | 'event' | 'battle' | 'reward' | 'victory';
 let screen: Screen = 'title';
 let battle: Battle | null = null;
 let renderer: SceneRenderer | null = null;
@@ -41,9 +43,12 @@ const TIME_SCALE = 0.75;
 let overlayShown = false;
 // `stage` is the stage that was cleared: the save has already moved on by the time the result
 // overlay renders, so it must not be looked up from the save again.
-let pendingResult: { xp: number; levelUps: number; final: boolean; stage: number } | null = null;
+let pendingResult: { xp: number; levelUps: number; final: boolean; stage: number; elite?: boolean } | null = null;
 let rewardChoices: ReturnType<typeof pickBoonChoices> = [];
+let rewardMinRarity: 'rare' | 'epic' | undefined;
 let rerollUsed = false;
+let currentEvent: EventDef | null = null;
+let eventOutcome: EventOutcome | null = null;
 let endHandled = false;
 let endTimer = 0;
 let logs: string[] = [];
@@ -100,6 +105,22 @@ function renderScreen(): void {
     case 'map':
       if (!hasHero()) { screen = 'classes'; renderScreen(); return; }
       render(renderMap(save));
+      audio.playMusic('map');
+      break;
+    case 'path':
+      if (!hasHero()) { screen = 'classes'; renderScreen(); return; }
+      render(renderPath(save));
+      audio.playMusic('map');
+      break;
+    case 'shrine':
+      if (!hasHero()) { screen = 'classes'; renderScreen(); return; }
+      render(renderShrine(save));
+      audio.playMusic('map');
+      break;
+    case 'event':
+      if (!hasHero()) { screen = 'classes'; renderScreen(); return; }
+      if (!currentEvent) { screen = 'map'; renderScreen(); return; }
+      render(renderEvent(save, currentEvent, eventOutcome));
       audio.playMusic('map');
       break;
     case 'victory': render(renderVictory(save)); audio.playMusic('menu'); break;
@@ -232,7 +253,10 @@ function startBattle(keepRally = false): void {
   stopBattle();
   const cls = classById(save.classId);
   const info = stageInfo(save.stage);
-  const wave = buildWave(save.stage, save.runSeed);
+  const node = currentNode();
+  const wave = node === 'fight' || node === 'elite'
+    ? buildNodeWave(save.stage, save.runSeed, node)
+    : buildWave(save.stage, save.runSeed);
   screen = 'battle';
   render(renderBattle({ save, cls, stage: save.stage, stats: heroStats() }));
   document.body.classList.add('in-battle');
@@ -447,8 +471,9 @@ function handleBattleEnd(victory: boolean): void {
   const save = getSave();
   if (victory) {
     const final = save.stage === TOTAL_STAGES - 1;
+    const node = currentNode();
     const res = completeStage(battle.hero.hp / battle.hero.stats.maxHp);
-    pendingResult = { xp: res.xp, levelUps: res.levelUps, final, stage: res.stageCleared };
+    pendingResult = { xp: res.xp, levelUps: res.levelUps, final, stage: res.stageCleared, elite: node === 'elite' };
     rally = 1;
     audio.sfx('victory');
     if (res.levelUps > 0) setTimeout(() => audio.sfx('levelup'), 500);
@@ -479,6 +504,7 @@ function showResultOverlay(): void {
         <div class="result-rewards">
           <span class="reward-chip">${icon('star')} <b>+${res?.xp ?? 0} XP</b></span>
           ${res?.levelUps ? `<span class="reward-chip">${icon('bolt')} <b>Level ${getSave().level}</b></span>` : ''}
+          ${res?.elite ? `<span class="reward-chip elite-chip">${icon('skull')} <b>Elite slain · rare boon</b></span>` : ''}
           ${res?.final ? '' : `<span class="reward-chip">${icon('crown')} <b>Boon earned</b></span>`}
           ${(res?.stage ?? -1) % 5 === 4
             ? `<span class="reward-chip">${icon('heart')} <b>Fully restored</b></span>`
@@ -603,26 +629,27 @@ function updateHud(): void {
 
 /* --------------------------------- rewards -------------------------------- */
 
-function showRewardScreen(): void {
+function showRewardScreen(minRarity?: 'rare' | 'epic'): void {
   const save = getSave();
   if (!save.classId) return navigate('classes');
   const res = pendingResult;
   if (!res) return navigate('map');
   screen = 'reward';
-  rewardChoices = pickBoonChoices();
+  rewardMinRarity = minRarity ?? (res.elite ? 'rare' : undefined);
+  rewardChoices = pickBoonChoices(undefined, [], rewardMinRarity);
   rerollUsed = false;
   render(renderReward(classById(save.classId), res.levelUps, res.xp, rewardChoices, true));
   audio.playMusic('map');
   window.scrollTo({ top: 0 });
 }
 
-/** One reroll per reward screen: a fresh hand that avoids the cards just shown. */
+/** One reroll per reward screen: a fresh hand that avoids the cards just shown and keeps its rarity floor. */
 function rerollBoons(): void {
   const save = getSave();
   const res = pendingResult;
   if (rerollUsed || screen !== 'reward' || !res || !save.classId) return;
   rerollUsed = true;
-  rewardChoices = pickBoonChoices(undefined, rewardChoices.map(b => b.id));
+  rewardChoices = pickBoonChoices(undefined, rewardChoices.map(b => b.id), rewardMinRarity);
   sfx('select');
   render(renderReward(classById(save.classId), res.levelUps, res.xp, rewardChoices, false));
 }
@@ -632,6 +659,7 @@ function chooseBoon(id: string): void {
   applyBoon(id);
   sfx('select');
   pendingResult = null;
+  rewardMinRarity = undefined;
   screen = 'map';
   renderScreen();
   if (boon) showToast(`${boon.name} acquired`);
@@ -665,6 +693,38 @@ function goMap(): void {
 
 function goVictory(): void {
   navigate('victory');
+}
+
+/* ------------------------------ road choices ------------------------------ */
+
+function openPathScreen(): void {
+  stopBattle();
+  rally = 1;
+  screen = 'path';
+  renderScreen();
+}
+
+function openShrineScreen(): void {
+  currentEvent = null;
+  eventOutcome = null;
+  screen = 'shrine';
+  renderScreen();
+  audio.playMusic('map');
+}
+
+function openEventScreen(): void {
+  const save = getSave();
+  currentEvent = eventFor(save.stage, save.runSeed);
+  eventOutcome = null;
+  screen = 'event';
+  renderScreen();
+  audio.playMusic('map');
+}
+
+function startNodeBattle(node: NodeType): void {
+  if (node === 'shrine') { openShrineScreen(); return; }
+  if (node === 'event') { openEventScreen(); return; }
+  startBattle();
 }
 
 function confirmClass(id: ClassId): void {
@@ -743,12 +803,68 @@ document.addEventListener('click', (ev) => {
   }
   const chooseEl = target.closest<HTMLElement>('[data-choose]');
   if (chooseEl) { sfx('click'); confirmClass(chooseEl.dataset.choose as ClassId); return; }
+  const pathEl = target.closest<HTMLElement>('.path-card[data-node]');
+  if (pathEl) {
+    sfx('click');
+    const node = pathEl.dataset.node as NodeType;
+    if (!choosePath(node)) return;
+    startNodeBattle(node);
+    return;
+  }
   const battleEl = target.closest<HTMLElement>('[data-battle]');
   if (battleEl) {
     sfx('click');
     const stage = Number(battleEl.dataset.battle);
     const save = getSave();
-    if (stage === save.stage && save.stage < TOTAL_STAGES) startBattle();
+    if (stage === save.stage && save.stage < TOTAL_STAGES) {
+      if (needsPathChoice()) { openPathScreen(); return; }
+      const node = currentNode();
+      if (node === 'shrine') { openShrineScreen(); return; }
+      if (node === 'event') { openEventScreen(); return; }
+      startBattle();
+    }
+    return;
+  }
+  const shrineEl = target.closest<HTMLElement>('[data-shrine]');
+  if (shrineEl) {
+    sfx('click');
+    const choice = shrineEl.dataset.shrine;
+    if (choice === 'rest') {
+      shrineRest();
+      completeNonCombat();
+      screen = 'map';
+      renderScreen();
+      showToast(`Rested · +${Math.round(BALANCE.path.restHeal * 100)}% health`);
+    } else if (choice === 'offering') {
+      shrineOffering();
+      const res = completeNonCombat();
+      pendingResult = { xp: res.xp, levelUps: res.levelUps, final: false, stage: res.stageCleared };
+      showRewardScreen('rare');
+    }
+    return;
+  }
+  const eventChoiceEl = target.closest<HTMLElement>('[data-event-choice]');
+  if (eventChoiceEl && currentEvent) {
+    sfx('click');
+    eventOutcome = resolveEvent(eventChoiceEl.dataset.eventChoice!);
+    renderScreen();
+    return;
+  }
+  if (target.closest('[data-event-continue]') && eventOutcome) {
+    sfx('click');
+    const outcome = eventOutcome;
+    eventOutcome = null;
+    const res = completeNonCombat(outcome.xpShare);
+    if (outcome.boon) {
+      pendingResult = { xp: res.xp, levelUps: res.levelUps, final: false, stage: res.stageCleared };
+      currentEvent = null;
+      showRewardScreen(outcome.boon);
+    } else {
+      currentEvent = null;
+      screen = 'map';
+      renderScreen();
+      showToast(`The road continues · +${Math.round(res.xp)} XP`);
+    }
     return;
   }
   if (target.closest('[data-reroll]')) { rerollBoons(); return; }
@@ -845,6 +961,9 @@ window.addEventListener('resize', () => {
 /* ---------------------------------- boot ---------------------------------- */
 
 function boot(): void {
+  if (location.search.includes('debug=1')) {
+    (window as unknown as Record<string, unknown>).__emberfallPath = { nodeOffer, eventFor };
+  }
   initHovercard();
   loadSave();
   screen = 'title';

@@ -7,7 +7,7 @@
  * skills (so it is a floor for the enemies) and the hero's armour (so it is a ceiling on threat).
  * Time-to-kill is therefore an upper bound and threat a lower bound — both show the trend.
  */
-import { CLASSES, LOCATIONS, TOTAL_STAGES, buildWave, classById, type ClassId } from '../../src/data';
+import { CLASSES, LOCATIONS, TOTAL_STAGES, buildWave, classById, type ClassId, type EnemyInstance } from '../../src/data';
 import { makeEnemyUnit } from '../../src/combat';
 import { statsFor, stageRewardXp, xpToNext } from '../../src/state';
 import { f0, f1, pc, table } from './report';
@@ -48,12 +48,13 @@ export interface StageRow {
 export function stageRows(): StageRow[] {
   const rows: StageRow[] = [];
   for (let stage = 0; stage < TOTAL_STAGES; stage++) {
-    const units = buildWave(stage, 1).map((inst) => makeEnemyUnit(inst, stage));
+    const wave = buildWave(stage, 1);
+    const units = wave.map((inst) => makeEnemyUnit(inst, stage));
     const level = levelAtStage(stage);
     const enemyHp = units.reduce((n, u) => n + u.stats.maxHp, 0);
     const enemyAtk = units.reduce((n, u) => n + u.stats.atk, 0) / units.length;
     const enemyArmor = units.reduce((n, u) => n + u.stats.armor, 0) / units.length;
-    const enemyDps = units.reduce((n, u) => n + basicDps(u.stats.atk, u.stats.crit, u.stats.critMult, u.stats.speed, 0), 0);
+    const enemyDps = packDpsForWave(wave, stage);
     const hero = {} as StageRow['hero'];
     for (const c of CLASSES) {
       const s = statsFor(c, level, []);
@@ -65,13 +66,17 @@ export function stageRows(): StageRow[] {
   return rows;
 }
 
-/** Pack DPS (enemy basic attacks, before hero armour) for every stage on one wave seed. */
+/** Pack DPS (enemy basic attacks, before hero armour) for one wave at one stage. */
+export function packDpsForWave(wave: EnemyInstance[], stage: number): number {
+  return wave
+    .map((inst) => makeEnemyUnit(inst, stage))
+    .reduce((n, u) => n + basicDps(u.stats.atk, u.stats.crit, u.stats.critMult, u.stats.speed, 0), 0);
+}
+
+/** Pack DPS for every stage on one wave seed. */
 export function packDpsByStage(seed: number): number[] {
   const out: number[] = [];
-  for (let stage = 0; stage < TOTAL_STAGES; stage++) {
-    const units = buildWave(stage, seed).map((inst) => makeEnemyUnit(inst, stage));
-    out.push(units.reduce((n, u) => n + basicDps(u.stats.atk, u.stats.crit, u.stats.critMult, u.stats.speed, 0), 0));
-  }
+  for (let stage = 0; stage < TOTAL_STAGES; stage++) out.push(packDpsForWave(buildWave(stage, seed), stage));
   return out;
 }
 

@@ -14,11 +14,11 @@ export const BALANCE = {
    * (src/combat.ts, src/state.ts, the battle flow in src/main.ts). The doc's config id covers logic
    * as well as numbers, so a logic fix still marks docs/balance.md as out of date.
    */
-  logic: 3,
+  logic: 4,
   /** Enemy waves. `stage` runs 0..24; five stages per realm, the fifth is the boss. */
   enemy: {
     hpPerStage: 0.155,                       // normal enemies: HP × (1 + stage × this)
-    bossHpPerStage: 0.24,                    // bosses: HP × (1 + stage × this)
+    bossHpPerStage: 0.26,                    // bosses: HP × (1 + stage × this)
     atkPerStage: 0.4,                     // normal enemies: ATK × (1 + stage × this)
     bossAtkPerStage: 0.38,                    // bosses: ATK × (1 + stage × this)
     escortAtkPerStage: 0.3,                 // the enemies that accompany a boss
@@ -74,6 +74,18 @@ export const BALANCE = {
     healOnWin: 0.25,                  // share of max HP restored after a normal win (on top of the HP left)
     retryHeal: 0.25,                  // extra share of max HP per defeat on the retry's starting health
     minStartHp: 0.2,                  // the hero never starts a stage below this share of max HP
+  },
+  /** Branching path (roguelike phase 2). */
+  path: {
+    weights: { fight: 45, elite: 25, shrine: 15, event: 15 }, // offer weights for steps 1-3
+    preBossShrine: 2,     // shrine weight multiplier on step 3 (the stop before the boss)
+    eliteHp: 2.5,         // elite node: every enemy's hpScale × this (tougher)…
+    eliteAtk: 1.0,        // …and atkScale × this (a little deadlier; never out-hits the realm's boss)
+    eliteXp: 1.5,         // elite node: stage XP × this
+    restHeal: 0.35,       // shrine Rest: + this share of max HP
+    offeringCost: 0.2,    // shrine Offering: − this share of max HP
+    nonCombatXp: 0.5,     // shrine/event: stage XP × this
+    hpFloor: 0.05,        // shrines and events never take health below this share
   },
 };
 
