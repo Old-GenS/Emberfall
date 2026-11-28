@@ -16,6 +16,7 @@ import { allClasses, seedsUpTo, simulate, summarize, type ClassMetrics } from '.
 import { TIERS } from './bots';
 import { table } from './report';
 import { balanceFingerprint, docFingerprint } from './fingerprint';
+import { brokenRails, describeRail, rails } from './rails';
 
 export type Matrix = Map<string, Map<ClassId, ClassMetrics>>;
 export const m = (x: Matrix, tier: string, cls: ClassId): ClassMetrics => {
@@ -83,6 +84,14 @@ export function evaluateTargets(x: Matrix): Verdict[] {
   const durs = CLASSES.map((c) => m(x, R, c.id).bossDur); const done = CLASSES.map((c) => m(x, R, c.id).completionPct);
   add('parity', 'Classes feel alike in length', 'No class should take twice as long as another to do the same job.', 'boss duration max/min ≤ 2 · finishes within 5 points',
     `${(Math.max(...durs) / Math.max(1e-9, Math.min(...durs))).toFixed(2)}× · ${Math.max(...done) - Math.min(...done)} points`, Math.max(...durs) / Math.max(1e-9, Math.min(...durs)) <= 2 && Math.max(...done) - Math.min(...done) <= 5);
+  // Guardrails against tuning that passes the targets by bending the game (see rails.ts).
+  const broken = brokenRails();
+  add('design-rails', 'Every knob inside its design rail', 'Targets measure outcomes; rails stop an optimiser from meeting them by bending the game (normal waves out-hitting bosses, a 60× burn, elites that never appear). Widening a rail is a person\u2019s design decision.', `${rails().length} values inside their documented ranges`,
+    broken.length ? broken.map(describeRail).join(' · ') : 'all inside', broken.length === 0);
+  // Features have to show up in play, or their targets measure nothing.
+  const elitesR = mean(CLASSES.map((c) => m(x, R, c.id).elites));
+  add('features-present', 'The road\u2019s choices show up', 'A target on a feature the run never meets passes vacuously; elites were once tuned down to 4% of offers so the elite target read "too few".', 'Regular meets ≥ 2 elites per run (class mean)',
+    `${elitesR.toFixed(1)} elites/run`, elitesR >= 2);
   return v;
 }
 

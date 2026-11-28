@@ -28,6 +28,23 @@ Pyromancer's 92% is measured over 31 elite fights, while the Warden, Shadowblade
 fall below the 20-fight sample floor and read "too few". Regular's boss first-try on 100 seeds is
 Warden 87%, Pyromancer 41%, Shadowblade 49%, Spiritcaller 85%.
 
+## Design rails
+
+`tools/balance/rails.ts` lists an allowed range for every tuning knob (enemy curve, guard values,
+heavies, the road's weights, elite toughness, class stats), and `npm test` fails the
+**design-rails** target if any value leaves its range. A second target, **features-present**,
+fails if a Regular run meets fewer than two elites, so a feature can't be tuned out of existence.
+
+They exist because three automated tuning passes (2026-11-26/27) each met the outcome targets by
+bending the game: normal waves out-hitting their bosses (`atkPerStage` 1.15), a 60× ATK
+perfect-guard burn, elite heavies at 11× ATK, boss danger shifted onto escorts, and elites offered
+4% of the time so the elite target passed on "too few" fights. Each of those now fails
+`npm test` by name.
+
+Rails are design decisions, not measurements. **Widening a rail is a person's call**, recorded
+here with the reason. If a target can't be met inside the rails, the honest result is a failing
+target in the report, not a wider rail or a smaller feature.
+
 ## Quick reference
 
 | Setting | Value | What it does |
